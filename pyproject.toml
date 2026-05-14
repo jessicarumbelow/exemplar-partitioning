@@ -1,0 +1,45 @@
+[project]
+name = "exemplar-partitioning"
+version = "0.1.0"
+description = "Training-free feature discovery for LLM activations via streaming exemplar partitioning."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Jessica Rumbelow" }]
+keywords = ["interpretability", "mechanistic-interpretability", "sparse-autoencoder", "llm", "feature-discovery"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.0",
+    "transformers>=4.40",
+    "scikit-learn>=1.4",
+    "numpy>=1.26",
+    "scipy>=1.12",
+    "hdbscan>=0.8",
+    "datasets>=2.18",
+    "anthropic>=0.40",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "tqdm",
+    "finch-clust>=0.2.2",
+    "pynndescent>=0.6.0",
+    "transformer-lens>=2.0",
+]
+
+[project.optional-dependencies]
+sae = ["sae-lens>=0.5"]
+
+[project.urls]
+Homepage = "https://github.com/jessicarumbelow/exemplar-partitioning"
+Repository = "https://github.com/jessicarumbelow/exemplar-partitioning"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ep*"]

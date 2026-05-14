@@ -1,0 +1,28 @@
+# Build / package
+*.egg-info/
+dist/
+build/
+
+# Caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Environments
+.venv/
+.env
+
+# Outputs / artifacts
+results/
+outputs/
+wandb/
+*.pkl
+*.npz
+
+# OS
+.DS_Store
+
+# External-repo clones for benchmark integration (SAEBench, AxBench, MIB, etc.)
+baselines/
