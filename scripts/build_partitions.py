@@ -999,7 +999,13 @@ def build_dictionary(
 PROBING_EVALS = {"sparse_probing", "sparse_probing_sae_probes"}
 
 
-def _readout_for(eval_type: str) -> tuple[str, int]:
+def _readout_for(
+    eval_type: str,
+    override: str | None = None,
+    override_k: int = 1,
+) -> tuple[str, int]:
+    if override is not None:
+        return (override, override_k)
     if eval_type in PROBING_EVALS:
         return ("signed", 1)
     return ("topk", 1)
@@ -1180,7 +1186,11 @@ def _run_saebench(args, dictionary, eval_types: list[str]) -> None:
     failed = []
     try:
         for eval_type in evals_to_run:
-            readout, k = _readout_for(eval_type)
+            readout, k = _readout_for(
+                eval_type,
+                override=getattr(args, "readout_override", None),
+                override_k=getattr(args, "readout_k", 1),
+            )
             selected_saes = _build_cas_saes(readout, k)
             if identity_entry is not None:
                 selected_saes.append(identity_entry)
@@ -2100,6 +2110,15 @@ def main() -> None:
                             help="Skip build and eval; just dump existing eval JSONs.")
     eval_group.add_argument("--no-identity-baseline", action="store_true",
                             help="Skip the IdentitySAE baseline row.")
+    eval_group.add_argument("--readout-override", type=str, default=None,
+                            choices=("topk", "signed", "cosine", "topk_norm", "binary"),
+                            help="Force a specific adapter readout for ALL evals. "
+                                 "Bypasses the per-eval default (PROBING_EVALS → 'signed', "
+                                 "everything else → 'topk' with k=1). Use for sparsity-vs-"
+                                 "normalisation ablations.")
+    eval_group.add_argument("--readout-k", type=int, default=1,
+                            help="k for --readout-override topk. Ignored for signed/cosine "
+                                 "(those are always dense). Default 1.")
     eval_group.add_argument("--compare-sae-n-tokens", type=int, default=None,
                             help="Activation budget for compare_sae's "
                                  "SAE-vs-EP correspondence (separate from "

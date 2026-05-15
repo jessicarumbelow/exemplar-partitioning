@@ -1,10 +1,10 @@
 # Exemplar Partitioning
 
-Training-free feature discovery for LLM activations. One streaming pass over activations builds a Voronoi partition of activation space — each cell anchored by a real first-arrival activation. No reconstruction loss, no fixed dictionary size, one hyperparameter (a distance percentile).
+We introduce Exemplar Partitioning (EP), an unsupervised method for constructing interpretable feature dictionaries from Large Language Model (LLM) activations with ~10³× fewer tokens than comparable sparse autoencoders. An EP dictionary is a Voronoi partition of activation space, built by leader-clustering streamed activations within a distance threshold. Each region is anchored by an observed exemplar that serves as both its membership criterion and intervention direction; dictionary size is not prespecified, but determined by the activation geometry at that threshold. Because exemplars are observed rather than learned, dictionaries built from the same data stream are directly comparable across layers, models, and training checkpoints.
 
-About 10³× fewer tokens than comparable SAEs at matched downstream performance. Dictionaries built from the same data stream are directly comparable across layers, models, and training checkpoints — because the exemplars are observed, not learned.
+This paper characterises EP as an interpretability object via targeted demonstrations of properties newly accessible through this construction, plus one head-to-head benchmark. In Gemma-2-2b, we find that EP dictionary regions are interpretable and support causal interventions: refusal in instruction-tuned Gemma concentrates in a region whose exemplar ablation can collapse held-out refusal. Cross-checkpoint matching between base and instruction-tuned dictionaries separates the directions preserved through finetuning from those introduced by it. EP regions and Gemma Scope SAE features decompose activation space differently, but agree on a shared core: ~20% of EP regions match an SAE feature at F₁ > 0.5, and EP one-hot probes retain ~97% of raw-activation probe accuracy at ℓ₀ = 1: the linearly-decodable identity that probing tests is largely preserved by density structure alone. Nearest-exemplar distance provides a free out-of-distribution signal at inference. On AxBench latent concept detection at Gemma-2-2B-it L20, EP at p₁ reaches mean AUROC 0.881, +0.126 over the canonical GemmaScope SAE leaderboard entry and within 0.030 of SAE-A's 0.911, at ~10³× less build compute. Code: [github.com/jessicarumbelow/exemplar-partitioning](https://github.com/jessicarumbelow/exemplar-partitioning).
 
-> **Paper:** "Exemplar Partitioning for Mechanistic Interpretability" — arXiv link coming soon.
+> **Paper:** ["Exemplar Partitioning for Mechanistic Interpretability"](https://arxiv.org/abs/2605.14347) (arXiv:2605.14347).
 >
 > **Pretrained dictionaries:** [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning) on HuggingFace — Gemma-2-2B and Gemma-2-2B-it at L4/L12/L20, percentiles $p \in \{1, 2, 4, 8, 10\}$.
 
@@ -120,10 +120,12 @@ pytest                 # ~30s, no GPU required
 
 ```bibtex
 @misc{rumbelow2026exemplar,
-  title  = {Exemplar Partitioning for Mechanistic Interpretability},
-  author = {Rumbelow, Jessica},
-  year   = {2026},
-  note   = {Preprint},
+  title         = {Exemplar Partitioning for Mechanistic Interpretability},
+  author        = {Rumbelow, Jessica},
+  year          = {2026},
+  eprint        = {2605.14347},
+  archivePrefix = {arXiv},
+  url           = {https://arxiv.org/abs/2605.14347},
 }
 ```
 

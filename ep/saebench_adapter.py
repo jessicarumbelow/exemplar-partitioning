@@ -77,7 +77,7 @@ class EPDictionarySAE(base_sae.BaseSAE):
     """SAEBench-compatible featurizer backed by an exemplar-partition dictionary."""
 
     BASES = ("mean", "exemplar")
-    READOUTS = ("topk", "signed", "cosine")
+    READOUTS = ("topk", "signed", "cosine", "signed_norm", "topk_norm", "binary")
 
     def __init__(
         self,
@@ -97,8 +97,10 @@ class EPDictionarySAE(base_sae.BaseSAE):
             raise ValueError(f"basis must be one of {self.BASES}, got {basis!r}")
         if readout not in self.READOUTS:
             raise ValueError(f"readout must be one of {self.READOUTS}, got {readout!r}")
-        if readout == "topk" and k < 1:
-            raise ValueError(f"k must be >= 1 for readout='topk', got {k}")
+        if readout in ("topk", "topk_norm") and k < 1:
+            raise ValueError(f"k must be >= 1 for readout={readout!r}, got {k}")
+        if readout == "binary" and k != 1:
+            raise ValueError(f"binary readout requires k=1, got {k}")
 
         self._dictionary = dictionary
         self.basis = basis
@@ -130,6 +132,25 @@ class EPDictionarySAE(base_sae.BaseSAE):
         if self.readout == "cosine":
             x_unit = torch.nn.functional.normalize(x_c, dim=-1, eps=1e-12)
             return x_unit @ self.W_enc
+        if self.readout == "signed_norm":
+            x_unit = torch.nn.functional.normalize(x_c, dim=-1, eps=1e-12)
+            return x_unit @ self.W_enc
+        if self.readout == "topk_norm":
+            x_unit = torch.nn.functional.normalize(x_c, dim=-1, eps=1e-12)
+            proj = x_unit @ self.W_enc
+            k = min(self.k, proj.shape[-1])
+            topk_vals, topk_idx = proj.topk(k, dim=-1)
+            topk_vals = torch.relu(topk_vals)
+            out = torch.zeros_like(proj)
+            out.scatter_(-1, topk_idx, topk_vals)
+            return out
+        if self.readout == "binary":
+            x_unit = torch.nn.functional.normalize(x_c, dim=-1, eps=1e-12)
+            proj = x_unit @ self.W_enc
+            _, top_idx = proj.topk(1, dim=-1)
+            out = torch.zeros_like(proj)
+            out.scatter_(-1, top_idx, torch.ones_like(top_idx, dtype=proj.dtype))
+            return out
         proj = x_c @ self.W_enc
         if self.readout == "signed":
             return proj
