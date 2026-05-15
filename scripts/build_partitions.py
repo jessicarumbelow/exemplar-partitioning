@@ -18,7 +18,29 @@ import torch
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "baselines" / "SAEBench"))
+SAEBENCH_ROOT = REPO_ROOT / "baselines" / "SAEBench"
+AXBENCH_ROOT = REPO_ROOT / "baselines" / "axbench"
+if SAEBENCH_ROOT.exists():
+    sys.path.insert(0, str(SAEBENCH_ROOT))
+
+
+def _require_baseline(name: str, path: Path, repo_url: str) -> None:
+    """Hard-fail with a copy-pasteable clone command if a baseline is missing.
+
+    The eval pathways (--eval sparse_probing/scr/tpp/core/autointerp/ravel/
+    unlearning/axbench) need third-party repos checked out under
+    ``baselines/``. We don't vendor them — they're large and have their own
+    licensing — so the user has to clone them once.
+    """
+    if path.exists():
+        return
+    raise RuntimeError(
+        f"--eval needs {name} at {path}, which is missing.\n"
+        f"  cd {REPO_ROOT} && mkdir -p baselines && \\\n"
+        f"    git clone {repo_url} {path}\n"
+        f"Then re-run."
+    )
+
 
 DEFAULT_MODEL = "google/gemma-2-2b"
 DEFAULT_MODEL_SHORT = "gemma-2-2b"
@@ -1054,6 +1076,11 @@ def _run_scr_or_tpp(eval_type: str, args, cfg, selected_saes) -> None:
 
 
 def _run_saebench(args, dictionary, eval_types: list[str]) -> None:
+    _require_baseline(
+        "SAEBench",
+        SAEBENCH_ROOT,
+        "https://github.com/adamkarvonen/SAEBench.git",
+    )
     import os
     import sae_bench.custom_saes.run_all_evals_custom_saes as saebench_runner
     import sae_bench.custom_saes.run_all_evals_dictionary_learning_saes as saebench_dict
@@ -1096,15 +1123,15 @@ def _run_saebench(args, dictionary, eval_types: list[str]) -> None:
 
     sae_meta: dict[str, dict[str, str]] = {}
     for basis in EPDictionarySAE.BASES:
-        sae_name = f"cas_{args.model_short}_layer_{args.layer}_{basis}"
+        sae_name = f"ep_{args.model_short}_layer_{args.layer}_{basis}"
         sae_meta[sae_name] = {"kind": "ep", "basis": basis}
     if identity_entry is not None:
         sae_meta[identity_entry[0]] = {"kind": "identity"}
 
-    def _build_cas_saes(readout: str, k: int) -> list:
+    def _build_ep_saes(readout: str, k: int) -> list:
         saes = []
         for basis in EPDictionarySAE.BASES:
-            sae_name = f"cas_{args.model_short}_layer_{args.layer}_{basis}"
+            sae_name = f"ep_{args.model_short}_layer_{args.layer}_{basis}"
             sae = EPDictionarySAE(
                 dictionary,
                 model_name=args.model_short,
@@ -1191,7 +1218,7 @@ def _run_saebench(args, dictionary, eval_types: list[str]) -> None:
                 override=getattr(args, "readout_override", None),
                 override_k=getattr(args, "readout_k", 1),
             )
-            selected_saes = _build_cas_saes(readout, k)
+            selected_saes = _build_ep_saes(readout, k)
             if identity_entry is not None:
                 selected_saes.append(identity_entry)
             logger.info("  %s: readout=%s k=%d", eval_type, readout, k)
@@ -1437,10 +1464,12 @@ def _run_axbench(args, dictionary) -> None:
         logger.warning("AxBench: no dictionary pickle at %s; skipping", pkl_path)
         return
 
-    axbench_root = REPO_ROOT / "baselines" / "axbench"
-    if not axbench_root.exists():
-        logger.warning("AxBench repo not at %s; skipping", axbench_root)
-        return
+    _require_baseline(
+        "AxBench",
+        AXBENCH_ROOT,
+        "https://github.com/stanfordnlp/axbench.git",
+    )
+    axbench_root = AXBENCH_ROOT
 
     prod_subdir = layers_for_model[args.layer]
     prod_data_dir = axbench_root / "axbench" / "concept500" / prod_subdir / "generate"
@@ -1693,7 +1722,7 @@ def _log_per_eval_scalars(args, eval_types: list[str]) -> None:
         _wandb_init(args, default_name=f"{args.model_short}_L{args.layer}_evals")
 
     sae_names = [
-        f"cas_{args.model_short}_layer_{args.layer}_{basis}"
+        f"ep_{args.model_short}_layer_{args.layer}_{basis}"
         for basis in EPDictionarySAE.BASES
     ]
     if not args.no_identity_baseline:
@@ -1870,7 +1899,7 @@ def _log_headline_table(
     for basis in EPDictionarySAE.BASES:
         row = [f"Partitions ({basis})", n_partitions, build_h]
         if saebench_evals:
-            sae_name = f"cas_{args.model_short}_layer_{args.layer}_{basis}"
+            sae_name = f"ep_{args.model_short}_layer_{args.layer}_{basis}"
             m = _read_eval_metrics(args.output_dir, sae_name)
             row.extend(m.get(c) for c in metric_cols)
         if run_compare_sae:
@@ -1978,7 +2007,7 @@ def _log_saebench_sota_detail(args, sota_width, sota_best, metric_cols) -> None:
     for basis in EPDictionarySAE.BASES:
         ep_metrics = _read_eval_metrics(
             args.output_dir,
-            f"cas_{args.model_short}_layer_{args.layer}_{basis}",
+            f"ep_{args.model_short}_layer_{args.layer}_{basis}",
         )
         for c in metric_cols:
             _, _, _, lower = HEADLINE_METRICS[c]

@@ -6,18 +6,50 @@ This paper characterises EP as an interpretability object via targeted demonstra
 
 > **Paper:** ["Exemplar Partitioning for Mechanistic Interpretability"](https://arxiv.org/abs/2605.14347) (arXiv:2605.14347).
 >
-> **Pretrained dictionaries:** [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning) on HuggingFace — Gemma-2-2B and Gemma-2-2B-it at L4/L12/L20, percentiles $p \in \{1, 2, 4, 8, 10\}$.
+> **Prebuilt dictionaries:** [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning) on HuggingFace — Gemma-2-2B and Gemma-2-2B-it at L4/L12/L20, percentiles $p \in \{1, 2, 4, 8, 10\}$. EP has no training step; the dictionaries are streamed partitions over Pile activations, distributed so you can skip the build.
 
 ## Install
 
 ```bash
-pip install -e .                # core
-pip install -e ".[sae]"         # + SAE comparison baselines (sae-lens, transformer-lens)
+pip install -e .                # core (includes transformer-lens for live extraction)
+pip install -e ".[sae]"         # + SAE comparison baselines (sae-lens, scikit-learn)
+pip install -e ".[scripts]"     # + paper-figure / eval scripts (datasets, wandb, ...)
+pip install -e ".[all]"         # everything
 ```
 
 Python ≥ 3.11. CUDA optional but recommended for any model larger than ~160M.
 
-## Quickstart
+## Quickstart: load a prebuilt dictionary
+
+The fastest way in is to load one of the published Gemma-2-2B dictionaries — no model load, no build pass, ~10s on a fresh machine:
+
+```python
+import ep
+
+# (model_short, layer, percentile). See "Prebuilt dictionaries" below for
+# the full matrix.
+d = ep.Dictionary.from_hub("gemma-2-2b", layer=12, percentile=10)
+print(d)
+# → Dictionary(5129 partitions, 4231 with ≥2 members, θ=0.0832, ||center||=2.3001)
+
+# Inspect the largest partitions.
+for p in sorted(d.partitions, key=lambda p: -p.member_count)[:3]:
+    print(f"K={p.member_count}, coherence={p.member_coherence:.2f}")
+    for dist, prompt, pos in p.closest_prompts[:3]:
+        print(f"  d={dist:.3f}  pos={pos}  {prompt[:80]!r}")
+```
+
+Assign new activations to their nearest partition:
+
+```python
+import numpy as np
+new_activations = np.random.randn(100, 2304).astype(np.float32)
+partition_ids, distances = d.assign(new_activations)
+```
+
+`distances` doubles as a free OOD signal — a large distance to the nearest exemplar means the activation falls outside the training distribution.
+
+## Build a dictionary from a live model
 
 ```python
 import ep
@@ -39,16 +71,11 @@ result = ep.discover(
     max_tokens=10_000_000,
 )
 dictionary = result.dictionary
-print(dictionary)
-# → Dictionary(5129 partitions, 4231 with ≥2 members, θ=0.0832, ||center||=2.3001)
-
-# 3. Use it. Assign new activations to their nearest partition:
-import numpy as np
-new_activations = np.random.randn(100, 2304).astype(np.float32)
-partition_ids, distances = dictionary.assign(new_activations)
 ```
 
-The same `distances` are also your free OOD signal — large distance to the nearest exemplar means the activation falls outside the training distribution. Computation runs wherever the model lives; CUDA is detected automatically.
+Computation runs wherever the model lives; CUDA is detected automatically.
+
+If you want the calibration cached across runs, use `ep.load_or_calibrate` instead of `ep.calibrate_pipeline`. The cache key is `(model_name, hook_name, percentile, extras)` — pass any extractor- or sampling-specific knobs (e.g. `extras={"extractor": "per-position", "ctx": 128}`) so two calibrations with different settings don't share a cache slot. The CLI uses `extras={"extractor", "sampling", "ctx"}` by default; match those keys to reuse its cache from Python.
 
 ## CLI
 
@@ -60,36 +87,74 @@ python -m scripts.build_partitions \
     --model google/gemma-2-2b --layer 12 \
     --percentile 10 --max-tokens 10_000_000
 
-# Add a SAEBench evaluation.
+# Reproduce the headline AxBench AUROC (Gemma-2-2B-it L20 p=1).
+python -m scripts.build_partitions \
+    --model google/gemma-2-2b-it --model-short gemma-2-2b-it \
+    --layer 20 --percentile 1 --max-tokens 10_000_000 \
+    --eval axbench
+
+# SAEBench sparse-probing eval.
 python -m scripts.build_partitions \
     --model google/gemma-2-2b --layer 12 \
     --percentile 10 --eval sparse_probing
-
-# Run all SAEBench evals.
-python -m scripts.build_partitions --eval all
 ```
 
+The eval pathways need third-party repos checked out under `baselines/` — the script prints the exact `git clone` command on first invocation. SAEBench: `https://github.com/adamkarvonen/SAEBench`. AxBench: `https://github.com/stanfordnlp/axbench`.
+
 Useful flags: `--model`, `--layer`, `--percentile`, `--max-tokens`, `--max-prompts`, `--seed`, `--device`, `--extractor {per-position,final-position}`, `--merge-close`.
+
+## Prebuilt dictionaries
+
+`Dictionary.from_hub` pulls from [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning). The matrix:
+
+| Model            | Layers       | Percentiles    |
+|------------------|--------------|----------------|
+| `gemma-2-2b`     | 12           | 1, 2, 4, 8, 10 |
+| `gemma-2-2b`     | 20           | 10             |
+| `gemma-2-2b-it`  | 4, 12, 20    | 1, 2, 4, 8, 10 |
 
 ## What's in a dictionary
 
 ```python
 dictionary.partitions                       # list[Partition]
-partition.exemplar_direction                # (dim,) unit vector in centred space —
-                                            #   the first-arrival activation that
-                                            #   created this partition
-partition.mean_member_direction             # (dim,) spherical mean of all member
-                                            #   directions, renormalised
+dictionary.center                           # (dim,) activation centroid from calibration
+dictionary.threshold                        # cosine distance threshold (scalar)
+
+partition.exemplar_direction                # (dim,) unit vector — the centered, L2-
+                                            #   normalised form of the first-arrival
+                                            #   activation that created this partition
+partition.mean_member_direction             # (dim,) spherical mean of member directions
 partition.member_count                      # int
-partition.member_coherence                  # float in [0, 1]; 1 = all members
-                                            #   point the same way
-partition.sample_prompts                    # heap of (-dist, prompt, pos) — the
-                                            #   closest prompts to this partition
-partition.boundary_prompts                  # heap of (dist, prompt, pos) — the
-                                            #   farthest prompts in this partition
+partition.member_coherence                  # float in [0, 1]; 1 = all members agree
+partition.closest_prompts                   # list of (dist, prompt, position) — closest first
+partition.farthest_prompts                  # list of (dist, prompt, position) — farthest first
 ```
 
 You can swap `exemplar_direction` for `mean_member_direction` as the partition's representative direction and get a slightly different downstream signal (the paper compares both at AxBench in §4.1).
+
+### Intervention with an exemplar
+
+`exemplar_direction` lives in the centered, unit-norm space the dictionary clusters in. To inject (or ablate) a partition in the model's raw activation space, undo the centering and pick a scale that matches the layer's typical activation norm:
+
+```python
+import torch
+p = d.partitions[42]
+e = torch.from_numpy(p.exemplar_direction)
+c = torch.from_numpy(d.center)
+
+# Add a centroid-scale push along the exemplar at hook time:
+def steer(act, hook, alpha=float(torch.linalg.norm(c))):
+    return act + alpha * e.to(act.device, act.dtype)
+model.add_hook("blocks.12.hook_resid_post", steer, "fwd")
+
+# To ablate the partition's direction instead, project it out:
+def ablate(act, hook):
+    x = (act - c.to(act)).to(torch.float32)
+    proj = (x @ e.to(act.device, torch.float32))[..., None] * e.to(act.device, torch.float32)
+    return (x - proj).to(act.dtype) + c.to(act)
+```
+
+The paper's refusal-collapse result (§4.3) uses exactly this ablation pattern on the partition whose exemplar matches the refusal direction in Gemma-2-2B-it L20.
 
 ## Repository layout
 
@@ -97,13 +162,14 @@ You can swap `exemplar_direction` for `mean_member_direction` as the partition's
 ep/                       # The package
 ├── discovery/
 │   ├── extraction.py        # Activation extractors (per-position, final-position)
-│   ├── dictionary.py        # Streaming exemplar-partition dictionary
+│   ├── dictionary.py        # Streaming exemplar-partition dictionary (+ from_hub)
 │   ├── pipeline.py          # calibrate_pipeline, discover
 │   ├── calibration.py       # Threshold calibration + on-disk cache
 │   ├── eval.py              # Intrinsic dictionary metrics
 │   └── geometry.py          # Centred unit-norm primitives + GPU detection
-├── saebench_adapter.py      # SAEBench-compatible EPDictionarySAE
-├── mib_adapter.py           # MIB Featurizer wrapper
+├── saebench_adapter.py      # SAEBench-compatible EPDictionarySAE wrapper
+├── saebench_sota.py         # Cached SAEBench leaderboard numbers for headline tables
+├── mib_adapter.py           # Featurizer / inverse-featurizer for MIB causal-variable track
 └── utils.py                 # set_seed
 
 scripts/                  # Build, evaluate, and reproduce the paper figures

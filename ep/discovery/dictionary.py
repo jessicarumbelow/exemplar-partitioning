@@ -52,7 +52,12 @@ def _cosine_pairwise(directions: np.ndarray) -> np.ndarray:
 
 @dataclass
 class Partition:
-    """One partition cell: two unit directions plus membership statistics."""
+    """One partition cell: two unit directions plus membership statistics.
+
+    The two ``*_prompts`` lists are min-heaps in the heapq convention; for
+    plain sorted access, use :attr:`closest_prompts` and
+    :attr:`farthest_prompts`.
+    """
 
     member_count: int
     exemplar_direction: np.ndarray            # unit vector, centered space
@@ -66,6 +71,28 @@ class Partition:
     boundary_prompts: list[tuple[float, str, int]] = field(default_factory=list)
     sample_members: list[np.ndarray] = field(default_factory=list)
     label: str | None = None
+
+    @property
+    def closest_prompts(self) -> list[tuple[float, str, int]]:
+        """Member prompts closest to the exemplar, sorted nearest-first.
+
+        Returns ``(distance, prompt, position)`` tuples with positive
+        distances. Wraps the ``sample_prompts`` heap (whose internal sign
+        convention is a ``heapq`` implementation detail).
+        """
+        return sorted(
+            ((-neg_dist, prompt, pos) for neg_dist, prompt, pos in self.sample_prompts),
+            key=lambda t: t[0],
+        )
+
+    @property
+    def farthest_prompts(self) -> list[tuple[float, str, int]]:
+        """Member prompts farthest from the exemplar, sorted farthest-first.
+
+        Returns ``(distance, prompt, position)`` tuples. Wraps the
+        ``boundary_prompts`` heap.
+        """
+        return sorted(self.boundary_prompts, key=lambda t: t[0], reverse=True)
 
 
 SAMPLE_RESERVOIR_CAP = 30
@@ -85,7 +112,8 @@ class Dictionary:
         merge_close: if True, run a post-batch pass that merges any pair of
             partitions whose exemplar directions are within ``threshold``.
             The larger partition keeps its first-arrival exemplar; the
-            smaller is dissolved into it (demotion strategy). Default False.
+            smaller is dissolved into it (demotion strategy). Off by
+            default; canonical EP keeps the full leader-clustering set.
 
     The ``exemplar_direction`` of each partition is the unit-direction form
     of its first-arrival activation, immutable for the life of the cell.
@@ -689,6 +717,56 @@ class Dictionary:
     def new_partition_rate(self) -> float:
         """Fraction of activations in the most recent batch that spawned new partitions."""
         return self._last_batch_new_partition_rate
+
+    # --------------------------------------------------------- hub load
+
+    @classmethod
+    def from_hub(
+        cls,
+        model_short: str = "gemma-2-2b",
+        layer: int = 12,
+        percentile: int = 10,
+        *,
+        repo_id: str = "J-RUM/exemplar-partitioning",
+        cache_dir: str | None = None,
+    ) -> "Dictionary":
+        """Load a published EP dictionary from the HuggingFace Hub.
+
+        EP dictionaries are built (streaming partition over observed
+        activations), not trained, so this method intentionally avoids the
+        ``from_pretrained`` naming used for learned models.
+
+        Args:
+            model_short: ``gemma-2-2b`` or ``gemma-2-2b-it``.
+            layer: 4, 12, or 20.
+            percentile: 1, 2, 4, 8, or 10. Note ``gemma-2-2b`` L20 only
+                ships ``p10``.
+            repo_id: HF dataset repo. Override only to point at a fork.
+            cache_dir: passed through to ``hf_hub_download``.
+
+        Returns:
+            The unpickled :class:`Dictionary`.
+        """
+        try:
+            from huggingface_hub import hf_hub_download
+        except ImportError as e:
+            raise ImportError(
+                "Dictionary.from_hub requires huggingface_hub. "
+                "Install it (or any of: transformers, datasets) to fetch "
+                "prebuilt dictionaries."
+            ) from e
+        import pickle
+
+        subdir = f"{model_short}_L{layer}_p{percentile}"
+        fname = f"{model_short}_layer{layer}.pkl"
+        path = hf_hub_download(
+            repo_id=repo_id,
+            filename=f"{subdir}/{fname}",
+            repo_type="dataset",
+            cache_dir=cache_dir,
+        )
+        with open(path, "rb") as f:
+            return pickle.load(f)
 
     def __len__(self) -> int:
         return len(self.partitions)

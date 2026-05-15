@@ -15,23 +15,27 @@ classifiers = [
 ]
 dependencies = [
     "torch>=2.0",
-    "transformers>=4.40",
-    "scikit-learn>=1.4",
     "numpy>=1.26",
     "scipy>=1.12",
-    "hdbscan>=0.8",
-    "datasets>=2.18",
-    "anthropic>=0.40",
-    "matplotlib>=3.8",
-    "seaborn>=0.13",
-    "tqdm",
-    "finch-clust>=0.2.2",
-    "pynndescent>=0.6.0",
-    "transformer-lens>=2.0",
+    "huggingface-hub>=0.20",     # Dictionary.from_pretrained
+    "transformers>=4.40",        # transformer-lens dependency for the quickstart
+    "transformer-lens>=2.0",     # live-model activation extraction
 ]
 
 [project.optional-dependencies]
-sae = ["sae-lens>=0.5"]
+# SAE-comparison baselines used by scripts/compare_sae.py and the SAEBench eval path.
+sae = ["sae-lens>=0.5", "scikit-learn>=1.4"]
+# Everything scripts/ needs: paper figures, Pile streaming, AxBench/SAEBench
+# orchestration, wandb logging, partition labeling.
+scripts = [
+    "matplotlib>=3.8",
+    "datasets>=2.18",
+    "scikit-learn>=1.4",
+    "wandb>=0.16",
+    "pyyaml>=6.0",
+    "anthropic>=0.40",
+]
+all = ["exemplar-partitioning[sae,scripts]"]
 
 [project.urls]
 Homepage = "https://github.com/jessicarumbelow/exemplar-partitioning"

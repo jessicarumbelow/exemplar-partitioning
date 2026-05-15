@@ -175,8 +175,10 @@ def discover(
             (dictionary, snapshots, stats_dict).
         log_fn: called every log_cadence batches with a flat metric dict.
         seed: random seed for prompt ordering.
-        merge_close: if True, run a post-batch merge pass on close-pair
-            partitions (§3.5 merge-sensitivity ablation). Default False.
+        merge_close: if True, run a post-batch merge pass that demotes
+            any partition whose exemplar falls within θ of a larger
+            partition's exemplar. Off by default; canonical EP keeps the
+            full leader-clustering partition set.
         activations_cache_dir: if set, write each batch's raw activations
             (plus prompt/position metadata) as a sharded `.npz`.
     """
