@@ -737,10 +737,10 @@ class Dictionary:
         ``from_pretrained`` naming used for learned models.
 
         Args:
-            model_short: ``gemma-2-2b`` or ``gemma-2-2b-it``.
-            layer: 4, 12, or 20.
-            percentile: 1, 2, 4, 8, or 10. Note ``gemma-2-2b`` L20 only
-                ships ``p10``.
+            model_short: ``gemma-2-2b`` (L12 full p sweep + L20 p10 only)
+                or ``gemma-2-2b-it`` (L4, L12, L20, full p sweep).
+            layer: see ``model_short``.
+            percentile: 1, 2, 4, 8, or 10. Cast to int before lookup.
             repo_id: HF dataset repo. Override only to point at a fork.
             cache_dir: passed through to ``hf_hub_download``.
 
@@ -757,7 +757,7 @@ class Dictionary:
             ) from e
         import pickle
 
-        subdir = f"{model_short}_L{layer}_p{percentile}"
+        subdir = f"{model_short}_L{layer}_p{int(percentile)}"
         fname = f"{model_short}_layer{layer}.pkl"
         path = hf_hub_download(
             repo_id=repo_id,

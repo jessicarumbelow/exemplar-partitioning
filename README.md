@@ -1,12 +1,12 @@
 # Exemplar Partitioning
 
-We introduce Exemplar Partitioning (EP), an unsupervised method for constructing interpretable feature dictionaries from Large Language Model (LLM) activations with ~10³× fewer tokens than comparable sparse autoencoders. An EP dictionary is a Voronoi partition of activation space, built by leader-clustering streamed activations within a distance threshold. Each region is anchored by an observed exemplar that serves as both its membership criterion and intervention direction; dictionary size is not prespecified, but determined by the activation geometry at that threshold. Because exemplars are observed rather than learned, dictionaries built from the same data stream are directly comparable across layers, models, and training checkpoints.
+We introduce Exemplar Partitioning (EP), an unsupervised method for constructing interpretable feature dictionaries from Large Language Model (LLM) activations with ~10³× fewer tokens than comparable sparse autoencoders. An EP dictionary is a Voronoi partition of centered, unit-norm activation space, built by leader-clustering streamed activations within a cosine-distance threshold. Each region is anchored by an observed exemplar that serves as both its membership criterion and intervention direction; dictionary size is not prespecified, but determined by the activation geometry at that threshold. Because exemplars are observed rather than learned, dictionaries built from the same data stream are directly comparable across layers, models, and training checkpoints.
 
 This paper characterises EP as an interpretability object via targeted demonstrations of properties newly accessible through this construction, plus one head-to-head benchmark. In Gemma-2-2b, we find that EP dictionary regions are interpretable and support causal interventions: refusal in instruction-tuned Gemma concentrates in a region whose exemplar ablation can collapse held-out refusal. Cross-checkpoint matching between base and instruction-tuned dictionaries separates the directions preserved through finetuning from those introduced by it. EP regions and Gemma Scope SAE features decompose activation space differently, but agree on a shared core: ~20% of EP regions match an SAE feature at F₁ > 0.5, and EP one-hot probes retain ~97% of raw-activation probe accuracy at ℓ₀ = 1: the linearly-decodable identity that probing tests is largely preserved by density structure alone. Nearest-exemplar distance provides a free out-of-distribution signal at inference. On AxBench latent concept detection at Gemma-2-2B-it L20, EP at p₁ reaches mean AUROC 0.881, +0.126 over the canonical GemmaScope SAE leaderboard entry and within 0.030 of SAE-A's 0.911, at ~10³× less build compute. Code: [github.com/jessicarumbelow/exemplar-partitioning](https://github.com/jessicarumbelow/exemplar-partitioning).
 
 > **Paper:** ["Exemplar Partitioning for Mechanistic Interpretability"](https://arxiv.org/abs/2605.14347) (arXiv:2605.14347).
 >
-> **Prebuilt dictionaries:** [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning) on HuggingFace — Gemma-2-2B and Gemma-2-2B-it at L4/L12/L20, percentiles $p \in \{1, 2, 4, 8, 10\}$. EP has no training step; the dictionaries are streamed partitions over Pile activations, distributed so you can skip the build.
+> **Prebuilt dictionaries:** [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning) on HuggingFace — Gemma-2-2B (L12 across $p \in \{1, 2, 4, 8, 10\}$, plus L20 at $p=10$) and Gemma-2-2B-it (L4/L12/L20 across $p \in \{1, 2, 4, 8, 10\}$). EP has no training step; the dictionaries are streamed partitions over Pile activations, distributed so you can skip the build. Files are Python pickles — verify the blob SHA on the dataset page before loading.
 
 ## Install
 
@@ -58,22 +58,29 @@ from transformer_lens import HookedTransformer
 model = HookedTransformer.from_pretrained("gemma-2-2b", device="cuda")
 texts = [...]  # any iterable of strings — Pile, your own corpus, etc.
 hook  = "blocks.12.hook_resid_post"
+extract_fn = ep.extract_per_position  # also: ep.extract_final_position
 
 # 1. Calibrate: choose a distance threshold from activation geometry.
+#    `percentile` is the p-th percentile of within-batch pairwise cosine
+#    distances after centering — smaller p = tighter cells, more partitions.
 calibration = ep.calibrate_pipeline(
     model, texts, hook,
     n_tokens=200_000, percentile=10.0,
+    extract_fn=extract_fn,
 )
 
 # 2. Discover: stream activations, grow the dictionary.
 result = ep.discover(
     model, texts, hook, calibration,
     max_tokens=10_000_000,
+    extract_fn=extract_fn,
 )
 dictionary = result.dictionary
 ```
 
 Computation runs wherever the model lives; CUDA is detected automatically.
+
+**Calibration and discovery must use the same extractor.** The threshold is calibrated against the distribution of activations the extractor produces; mixing per-position calibration with final-position discovery (or different context lengths) silently produces meaningless cells. The CLI handles this for you; in Python, pass the same `extract_fn` to both calls.
 
 If you want the calibration cached across runs, use `ep.load_or_calibrate` instead of `ep.calibrate_pipeline`. The cache key is `(model_name, hook_name, percentile, extras)` — pass any extractor- or sampling-specific knobs (e.g. `extras={"extractor": "per-position", "ctx": 128}`) so two calibrations with different settings don't share a cache slot. The CLI uses `extras={"extractor", "sampling", "ctx"}` by default; match those keys to reuse its cache from Python.
 
@@ -101,7 +108,7 @@ python -m scripts.build_partitions \
 
 The eval pathways need third-party repos checked out under `baselines/` — the script prints the exact `git clone` command on first invocation. SAEBench: `https://github.com/adamkarvonen/SAEBench`. AxBench: `https://github.com/stanfordnlp/axbench`.
 
-Useful flags: `--model`, `--layer`, `--percentile`, `--max-tokens`, `--max-prompts`, `--seed`, `--device`, `--extractor {per-position,final-position}`, `--merge-close`.
+Useful flags: `--model`, `--layer`, `--percentile`, `--max-tokens`, `--max-prompts`, `--seed`, `--device`, `--extractor {per-position,final-position}`.
 
 ## Prebuilt dictionaries
 
@@ -130,7 +137,7 @@ partition.closest_prompts                   # list of (dist, prompt, position) �
 partition.farthest_prompts                  # list of (dist, prompt, position) — farthest first
 ```
 
-You can swap `exemplar_direction` for `mean_member_direction` as the partition's representative direction and get a slightly different downstream signal (the paper compares both at AxBench in §4.1).
+A partition has two candidate "representative directions". `exemplar_direction` is the first-arrival activation that anchored the cell — observed, immutable, and the direction used for intervention examples below. `mean_member_direction` is the spherical mean of everything assigned to the cell — a denoised consensus that drifts as the cell fills. The paper benchmarks both at AxBench in §4.1; neither dominates uniformly, so default to `exemplar_direction` for causal interventions (you know exactly what you're injecting) and `mean_member_direction` for read-out / probing (lower variance).
 
 ### Intervention with an exemplar
 
@@ -154,7 +161,7 @@ def ablate(act, hook):
     return (x - proj).to(act.dtype) + c.to(act)
 ```
 
-The paper's refusal-collapse result (§4.3) uses exactly this ablation pattern on the partition whose exemplar matches the refusal direction in Gemma-2-2B-it L20.
+The paper's refusal-collapse result (§4.3) uses exactly this ablation pattern on the partition whose exemplar matches the refusal direction in Gemma-2-2B-it L20. To reproduce end-to-end — build the dictionary, score partitions by member refusal rate, ablate the top one on a held-out harmful set — run [`scripts/exp_behavioral.py`](scripts/exp_behavioral.py); the per-percentile plotting (`make_fig_refusal.py`) consumes its JSON outputs.
 
 ## Repository layout
 
