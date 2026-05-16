@@ -34,6 +34,7 @@ scripts = [
     "wandb>=0.16",
     "pyyaml>=6.0",
     "anthropic>=0.40",
+    "kaleido>=0.2",              # PNG export for sphere_voronoi.py
 ]
 all = ["exemplar-partitioning[sae,scripts]"]
 

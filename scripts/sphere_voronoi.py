@@ -5,7 +5,7 @@ is S^(d-1). We PCA-project to R^3, radially push to S^2, then tessellate. Cell
 boundaries are an approximation of the high-D partition (same caveat as the
 2D PCA Voronoi in build_partitions.py:_wandb_checkpoint).
 
-Output: interactive plotly HTML.
+Output: interactive plotly HTML, plus optional high-res PNG (--png).
 """
 from __future__ import annotations
 
@@ -443,12 +443,20 @@ def render(
     seed: int = 0,
     label_mode: str = "click",
     labels: list[str] | None = None,
+    png: Path | None = None,
+    image_width: int = 1200,
+    image_height: int = 1200,
+    image_scale: float = 2.0,
 ) -> None:
     """Render an interactive sphere with click-to-toggle labels.
 
     If ``labels`` is provided, those strings are used directly (one per
     partition). Otherwise we fall back to a snippet of the closest sample
     prompt — useful for back-compat / local runs without a model loaded.
+
+    If ``png`` is given, also write a static PNG (dots + cell edges only —
+    labels live in browser JS and so don't appear in the static export,
+    which is fine for paper figures).
     """
     partitions = list(dictionary.partitions)
     if len(partitions) < 5:
@@ -541,6 +549,25 @@ def render(
     )
     print(f"wrote {output}")
 
+    if png is not None:
+        try:
+            import kaleido  # noqa: F401
+        except ImportError as e:
+            raise SystemExit(
+                "PNG export needs kaleido (`pip install kaleido`). "
+                "Or install the scripts extra: `pip install -e \".[scripts]\"`."
+            ) from e
+        png.parent.mkdir(parents=True, exist_ok=True)
+        # Title is set for the interactive HTML; strip it for the static
+        # export so the sphere fills the frame.
+        static = go.Figure(fig)
+        static.update_layout(title=None, margin=dict(l=0, r=0, t=0, b=0))
+        static.write_image(
+            png, width=image_width, height=image_height, scale=image_scale,
+        )
+        print(f"wrote {png}  ({image_width * image_scale:.0f}×"
+              f"{image_height * image_scale:.0f}px)")
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -549,6 +576,17 @@ def main() -> None:
     ap.add_argument("--model-short", type=str, required=True)
     ap.add_argument("--layer", type=int, required=True)
     ap.add_argument("--out", type=Path, default=Path("sphere_voronoi.html"))
+    ap.add_argument("--png", type=Path, default=None,
+                    help="if set, also write a high-res PNG (dots only, "
+                         "no labels). Needs kaleido.")
+    ap.add_argument("--width", type=int, default=1200,
+                    help="PNG width in CSS pixels; effective resolution = "
+                         "width × scale. Default 1200.")
+    ap.add_argument("--height", type=int, default=1200,
+                    help="PNG height in CSS pixels. Default 1200.")
+    ap.add_argument("--scale", type=float, default=2.0,
+                    help="PNG pixel density multiplier (kaleido). "
+                         "Default 2.0 → 2400×2400 at default width/height.")
     ap.add_argument("--n-labels", type=int, default=15)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--label-mode", choices=["click"], default="click",
@@ -558,7 +596,9 @@ def main() -> None:
     from scripts.build_partitions import load_dictionary
     dictionary = load_dictionary(args.output_dir, args.model_short, args.layer)
     render(dictionary, args.out, n_labels=args.n_labels, seed=args.seed,
-           label_mode=args.label_mode)
+           label_mode=args.label_mode, png=args.png,
+           image_width=args.width, image_height=args.height,
+           image_scale=args.scale)
 
 
 if __name__ == "__main__":
