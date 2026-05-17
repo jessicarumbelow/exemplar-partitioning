@@ -9,7 +9,7 @@ magnitudes — only directions. Magnitude is supplied at inference time by the
 input via `||x_c||` and threaded through whichever readout the downstream task
 wants.
 
-Two basis choices and three readouts are supported.
+Two basis choices and six readouts are supported.
 
 Bases:
 - "exemplar" (Partition.exemplar_direction): the seed activation that spawned
@@ -39,12 +39,19 @@ Readouts (selected per evaluation):
   `(x_c / ||x_c||) @ W_enc`, returning values in [-1, 1] per direction. Use
   when averaging alignment across inputs of varying norm (concept selection,
   distance-to-cover signals) — high-norm tokens cannot dominate the average.
+- readout="signed_norm": magnitude-removed signed projections. Same as
+  `signed` but using the unit-normalised `x_c`, so values are in [-1, 1].
+- readout="topk_norm": magnitude-removed top-k. Same as `topk` but on the
+  unit-normalised `x_c`, so values are in [0, 1].
+- readout="binary": single-hot assignment (requires k=1). Encoder emits a
+  single 1.0 at the nearest-cosine partition; everything else is zero. Use
+  when the downstream task cares only about cell identity, not magnitude.
 
-Decode is symmetric: `feature_acts @ W_dec + center`. Under topk, only the
-selected k entries contribute. Under signed, all K do (which under our
-non-orthonormal directions overshoots — `signed` is intended as an encoder
-readout for downstream consumers like probes, not for round-trip
-reconstruction).
+Decode is symmetric: `feature_acts @ W_dec + center`. Under topk / topk_norm
+/ binary, only the selected k entries contribute. Under signed / signed_norm
+/ cosine, all K do (which under our non-orthonormal directions overshoots —
+the dense readouts are intended for downstream consumers like probes, not
+for round-trip reconstruction).
 """
 
 from __future__ import annotations

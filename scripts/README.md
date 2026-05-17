@@ -18,7 +18,7 @@ The figure-makers all write into `figures/` by default.
 | `compare_sae.py`       | Cross-decomposition F1: per-EP-partition F1 against the best-matching Gemma Scope SAE feature, and vice versa. Used for §6 + app. §B. |
 | `label_dictionary.py`  | Generate human-readable labels per partition from sample prompts via Anthropic API.                                                   |
 | `match_dictionaries.py`| Bipartite-match partitions across two dictionaries by exemplar similarity. Used for §9 + app. §A.3 + app. §A.6 (cross-checkpoint), and §A.7 (cross-seed stability). |
-| `aggregate_reanchor.py`| Reanchor cells on the Modal volume and tabulate `{mean, exemplar, exemplar_reanchored}` × `{p, seed}` for ablation-Δ comparison.      |
+| `aggregate_reanchor.py`| Reanchor cells under a results root and tabulate `{mean, exemplar, exemplar_reanchored}` × `{p, seed}` for ablation-Δ comparison. |
 | `run_all.py`           | Convenience wrapper: build a sweep of percentiles for one (model, layer), optionally with eval.                                       |
 
 ## Paper experiments

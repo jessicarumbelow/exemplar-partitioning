@@ -16,13 +16,14 @@ from __future__ import annotations
 import heapq
 import logging
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Any, Callable, Iterator
 
 import numpy as np
 
-from .calibration import Calibration, calibrate
+from .calibration import Calibration, calibrate, load as _load_calibration, save as _save_calibration
 from .dictionary import Dictionary
 from .eval import _gini
 
@@ -110,11 +111,20 @@ def calibrate_pipeline(
     extract_kwargs: dict | None = None,
     prompt_batch_size: int = 16,
     seed: int = 0,
+    cache_model_name: str | None = None,
+    cache_extras: Mapping[str, Any] | None = None,
+    force_recalibrate: bool = False,
 ) -> Calibration:
     """Extract activations until ``n_tokens`` are seen, then compute (center, threshold).
 
     Identical extraction settings to :func:`discover` so the calibration
     matches what the dictionary will see.
+
+    Caching: if ``cache_model_name`` is provided, the result is keyed on
+    ``(cache_model_name, hook_name, percentile, cache_extras)`` under
+    ``~/.cache/ep/calibration/`` (override with ``EP_CALIBRATION_CACHE``).
+    On hit with at least ``n_tokens`` activations cached, the model is not
+    invoked. Pass ``force_recalibrate=True`` to bypass the cache.
     """
     from .extraction import extract_per_position as _default_extract
 
@@ -123,13 +133,28 @@ def calibrate_pipeline(
     if extract_kwargs is None:
         extract_kwargs = {}
 
+    if cache_model_name is not None and not force_recalibrate:
+        cached = _load_calibration(cache_model_name, hook_name, percentile, cache_extras)
+        if cached is not None and cached.n_activations >= n_tokens:
+            logger.info(
+                "calibration cache hit (n_activations=%d, threshold=%.6f)",
+                cached.n_activations, cached.threshold,
+            )
+            return cached
+
     batches = _iter_activation_batches(
         model, texts, hook_name,
         extract_fn=extract_fn, extract_kwargs=extract_kwargs,
         prompt_batch_size=prompt_batch_size,
         seed=seed,
     )
-    return calibrate(batches, n_tokens=n_tokens, percentile=percentile)
+    calibration = calibrate(batches, n_tokens=n_tokens, percentile=percentile)
+
+    if cache_model_name is not None:
+        path = _save_calibration(cache_model_name, hook_name, calibration, cache_extras)
+        logger.info("calibration cached to %s", path)
+
+    return calibration
 
 
 def discover(

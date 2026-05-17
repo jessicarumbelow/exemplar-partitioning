@@ -22,8 +22,8 @@ held-out distribution but reject random activations. The within-threshold
 rate functions as a free distribution-shift / OOD signal — no
 auxiliary classifier or confidence head needed.
 
-Run on Modal:
-    modal run ep_modal_experiments.py::coverage
+Run:
+    uv run python -m scripts.exp_coverage --dict-paths d1.pkl,d2.pkl,d3.pkl
 """
 from __future__ import annotations
 
@@ -234,7 +234,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="ep-properties")
-    parser.add_argument("--wandb-entity", default="jessicamarycooper")
+    parser.add_argument("--wandb-entity", default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
     args = parser.parse_args()
 

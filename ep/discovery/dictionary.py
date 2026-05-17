@@ -77,12 +77,14 @@ class Partition:
     def closest_prompts(self) -> list[tuple[float, str, int]]:
         """Member prompts closest to the exemplar, sorted nearest-first.
 
-        Returns ``(distance, prompt, position)`` tuples with positive
+        Returns ``(distance, prompt, position)`` tuples with non-negative
         distances. Wraps the ``sample_prompts`` heap (whose internal sign
-        convention is a ``heapq`` implementation detail).
+        convention is a ``heapq`` implementation detail). Tiny float-noise
+        negatives that pre-clamp builds may have stored are clamped to 0.
         """
         return sorted(
-            ((-neg_dist, prompt, pos) for neg_dist, prompt, pos in self.sample_prompts),
+            ((max(0.0, -neg_dist), prompt, pos)
+             for neg_dist, prompt, pos in self.sample_prompts),
             key=lambda t: t[0],
         )
 
@@ -90,10 +92,14 @@ class Partition:
     def farthest_prompts(self) -> list[tuple[float, str, int]]:
         """Member prompts farthest from the exemplar, sorted farthest-first.
 
-        Returns ``(distance, prompt, position)`` tuples. Wraps the
-        ``boundary_prompts`` heap.
+        Returns ``(distance, prompt, position)`` tuples with non-negative
+        distances. Wraps the ``boundary_prompts`` heap.
         """
-        return sorted(self.boundary_prompts, key=lambda t: t[0], reverse=True)
+        return sorted(
+            ((max(0.0, dist), prompt, pos)
+             for dist, prompt, pos in self.boundary_prompts),
+            key=lambda t: t[0], reverse=True,
+        )
 
 
 SAMPLE_RESERVOIR_CAP = 30
@@ -192,6 +198,9 @@ class Dictionary:
         Hot path of add_batch: scales O(B × D × K). Runs on GPU when CUDA is
         available and never materialises the (B, K) intermediate on host.
         Returns numpy arrays so the rest of add_batch is unchanged.
+
+        Distances are clamped to ``[0, 2]`` so float-rounding on near-parallel
+        unit vectors can't produce slightly-negative cosine distances.
         """
         n_partitions = len(self.partitions)
         if self._use_torch and n_partitions > 0:
@@ -202,12 +211,14 @@ class Dictionary:
             )
             sim = x_t @ E_t.T
             best_sim, best_idx = sim.max(dim=1)
-            min_dists = (1.0 - best_sim).cpu().numpy().astype(np.float32, copy=False)
+            min_dists = (1.0 - best_sim).clamp_(min=0.0, max=2.0).cpu().numpy().astype(
+                np.float32, copy=False,
+            )
             best_idxs = best_idx.cpu().numpy().astype(np.int64, copy=False)
             return min_dists, best_idxs
 
         E = self._exemplar_direction_matrix()
-        all_dists = 1.0 - batch_dirs @ E.T
+        all_dists = np.clip(1.0 - batch_dirs @ E.T, 0.0, 2.0)
         return all_dists.min(axis=1), all_dists.argmin(axis=1)
 
     def _ensure_exemplar_capacity(self, size: int, sample: np.ndarray) -> None:
@@ -373,7 +384,7 @@ class Dictionary:
                         if best_sim >= sim_threshold:
                             follower_local_idx.append(i)
                             follower_leader.append(best)
-                            follower_dist.append(1.0 - best_sim)
+                            follower_dist.append(max(0.0, 1.0 - best_sim))
                             continue
                     leader_local_buf[leader_count] = i
                     leader_local_idx.append(i)
@@ -673,10 +684,11 @@ class Dictionary:
     def distances(self, x: np.ndarray) -> np.ndarray:
         """Cosine distance from each activation to each partition exemplar.
 
-        Returns an ``(N, K)`` array of distances. Runs on GPU when CUDA is
-        available; the (N, K) result is then moved to host. For very large N
-        and K this can exceed host memory — callers that only need argmin or
-        a per-row reduction should use ``assign`` instead.
+        Returns an ``(N, K)`` array of distances clamped to ``[0, 2]``. Runs
+        on GPU when CUDA is available; the (N, K) result is then moved to
+        host. For very large N and K this can exceed host memory — callers
+        that only need argmin or a per-row reduction should use ``assign``
+        instead.
         """
         if not self.partitions:
             return np.full((len(x), 0), np.inf)
@@ -689,9 +701,11 @@ class Dictionary:
                 device=self._torch_device, dtype=torch.float32,
             )
             sim = x_t @ E_t.T
-            return (1.0 - sim).cpu().numpy().astype(np.float32, copy=False)
+            return (1.0 - sim).clamp_(min=0.0, max=2.0).cpu().numpy().astype(
+                np.float32, copy=False,
+            )
         E = self._exemplar_direction_matrix()
-        return 1.0 - directions @ E.T
+        return np.clip(1.0 - directions @ E.T, 0.0, 2.0)
 
     # ------------------------------------------------------- diagnostics
 
@@ -738,8 +752,10 @@ class Dictionary:
         ``from_pretrained`` naming used for learned models.
 
         Args:
-            model_short: ``gemma-2-2b`` (L12 full p sweep + L20 p10 only)
-                or ``gemma-2-2b-it`` (L4, L12, L20, full p sweep).
+            model_short: ``gemma-2-2b`` (L12 full p sweep + L20 p=10 only)
+                or ``gemma-2-2b-it`` (L4 p=4, L12 p=10, L20 full p sweep).
+                See the "Prebuilt dictionaries" table in README.md for the
+                exact (layer, percentile) matrix.
             layer: see ``model_short``.
             percentile: 1, 2, 4, 8, or 10. Cast to int before lookup.
             repo_id: HF dataset repo. Override only to point at a fork.

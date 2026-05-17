@@ -12,8 +12,8 @@ Pipeline:
    the hit partitions. If geometry encodes semantic category at this layer,
    within-category distance < between-category distance.
 
-Run on Modal:
-    modal run ep_modal_experiments.py::category_firing
+Run:
+    uv run python -m scripts.exp_category_firing --dict-path path/to/dictionary.pkl
 """
 
 from __future__ import annotations

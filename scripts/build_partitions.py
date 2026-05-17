@@ -135,8 +135,8 @@ def activations_slug(args: argparse.Namespace) -> str:
 def activations_cache_dir_for(args: argparse.Namespace) -> Path:
     """Path to the shared raw-activation shard cache.
 
-    Sibling of ``args.output_dir`` (so on Modal: ``/vol/dictionaries/<slug>``
-    builds shard into ``/vol/dictionaries/activations_cache/<activations_slug>``),
+    Sibling of ``args.output_dir`` (so ``<root>/dictionaries/<slug>`` builds
+    shard into ``<root>/dictionaries/activations_cache/<activations_slug>``),
     keyed only on the args that determine the activations themselves.
     """
     return args.output_dir.parent / "activations_cache" / activations_slug(args)
@@ -339,13 +339,13 @@ def save_dictionary(
 def _wandb_init(args: argparse.Namespace, default_name: str) -> None:
     """Init or resume a wandb run, depending on whether --wandb-run-id is set.
 
-    Resume mode is used by the Modal aggregator so the build phase + every
-    fan-out eval ultimately log into a single run instead of one-per-stage.
+    Resume mode lets a multi-stage build (build then fan-out evals) log into
+    a single run instead of one-per-stage.
     """
     import wandb
     init_kwargs = dict(
         project=args.wandb_project,
-        entity="jessicamarycooper",
+        entity=args.wandb_entity,
         config=vars(args),
     )
     if args.wandb_run_id:
@@ -933,29 +933,19 @@ def build_dictionary(
             logger.info("Wandb snapshot at %d acts: %d partitions",
                         stats["total_acts"], len(dictionary))
 
-    from ep.discovery.calibration import (
-        load as _load_calibration, save as _save_calibration,
-    )
     from ep.discovery.pipeline import calibrate_pipeline
 
     cache_model_name = model_name or model_short
     cal_extras = dict(calibration_extras) if calibration_extras else None
-    calibration = (
-        None if force_recalibrate
-        else _load_calibration(cache_model_name, hook_name, percentile, cal_extras)
+    calibration = calibrate_pipeline(
+        model=model, texts=texts, hook_name=hook_name,
+        n_tokens=calibration_tokens, percentile=percentile,
+        extract_fn=extract_fn, extract_kwargs=extract_kwargs or {},
+        prompt_batch_size=prompt_batch_size, seed=seed,
+        cache_model_name=cache_model_name,
+        cache_extras=cal_extras,
+        force_recalibrate=force_recalibrate,
     )
-    if calibration is None or calibration.n_activations < calibration_tokens:
-        logger.info("Calibrating: %d tokens @ p%g (cache miss or insufficient)",
-                    calibration_tokens, percentile)
-        calibration = calibrate_pipeline(
-            model=model, texts=texts, hook_name=hook_name,
-            n_tokens=calibration_tokens, percentile=percentile,
-            extract_fn=extract_fn, extract_kwargs=extract_kwargs or {},
-            prompt_batch_size=prompt_batch_size, seed=seed,
-        )
-        _save_calibration(cache_model_name, hook_name, calibration, cal_extras)
-    else:
-        logger.info("Calibration cache hit (n_activations=%d)", calibration.n_activations)
     logger.info("Calibration: ||center||=%.4f θ=%.6f (n_acts=%d)",
                 float(np.linalg.norm(calibration.center)), calibration.threshold,
                 calibration.n_activations)
@@ -1396,9 +1386,9 @@ def _ensure_axbench_seed_data(axbench_root: Path) -> Path:
     seed_instructions from ``master_data_dir`` (axbench/utils/dataset.py:202-203),
     and steering inference additionally reads ``alpaca_eval.json`` from the
     same dir (axbench/utils/dataset.py:677-678). The repo only ships download
-    scripts (download-seed-sentences.py, download-alpaca.sh), and the Modal
-    mount of the axbench source is read-only, so we cache the HuggingFace
-    pulls on the writable /vol volume.
+    scripts (download-seed-sentences.py, download-alpaca.sh). When the
+    baselines checkout is on a read-only filesystem, we cache the HuggingFace
+    pulls to a writable path instead.
     """
     import subprocess
     import urllib.request
@@ -1584,8 +1574,8 @@ def _run_axbench(args, dictionary) -> None:
     # via env var instead.
     env["EP_LIBRARY_PATH"] = str(pkl_path)
     # evaluate.py:384 hardcodes master_data_dir="axbench/data" for the LMJudge
-    # cache, which resolves under the read-only Modal mount. Override via env
-    # so the LM cache lands on the writable /vol volume alongside the seed data.
+    # cache. When the baselines checkout is on a read-only filesystem, override
+    # via env so the LM cache lands on a writable path alongside the seed data.
     env["AXBENCH_MASTER_DATA_DIR"] = str(master_data_dir)
 
     def _torchrun(module: str, *extra: str) -> int:
@@ -2109,10 +2099,11 @@ def main() -> None:
                              "directions lie within θ (demotion strategy).")
     parser.add_argument("--wandb", action="store_true", help="Enable wandb logging.")
     parser.add_argument("--wandb-project", type=str, default="ep")
+    parser.add_argument("--wandb-entity", type=str, default=None,
+                        help="wandb entity (defaults to your wandb auth's default).")
     parser.add_argument("--wandb-run-id", type=str, default=None,
-                        help="Resume an existing wandb run by id. Used by the "
-                             "Modal aggregator step so build + eval results all "
-                             "land in the same run.")
+                        help="Resume an existing wandb run by id. Used to keep "
+                             "build + eval results in the same run when staged.")
     parser.add_argument("--no-attribution", action="store_true",
                         help="Skip the per-partition gradient-attribution table at "
                              "finalise (saves ~N_partitions × 6 forward+backward passes).")
@@ -2140,14 +2131,16 @@ def main() -> None:
     eval_group.add_argument("--no-identity-baseline", action="store_true",
                             help="Skip the IdentitySAE baseline row.")
     eval_group.add_argument("--readout-override", type=str, default=None,
-                            choices=("topk", "signed", "cosine", "topk_norm", "binary"),
+                            choices=("topk", "signed", "cosine",
+                                     "signed_norm", "topk_norm", "binary"),
                             help="Force a specific adapter readout for ALL evals. "
                                  "Bypasses the per-eval default (PROBING_EVALS → 'signed', "
                                  "everything else → 'topk' with k=1). Use for sparsity-vs-"
                                  "normalisation ablations.")
     eval_group.add_argument("--readout-k", type=int, default=1,
-                            help="k for --readout-override topk. Ignored for signed/cosine "
-                                 "(those are always dense). Default 1.")
+                            help="k for --readout-override topk / topk_norm. Ignored for "
+                                 "signed / signed_norm / cosine (those are always dense) "
+                                 "and binary (always k=1). Default 1.")
     eval_group.add_argument("--compare-sae-n-tokens", type=int, default=None,
                             help="Activation budget for compare_sae's "
                                  "SAE-vs-EP correspondence (separate from "

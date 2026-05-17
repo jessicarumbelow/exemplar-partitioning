@@ -17,7 +17,7 @@ dependencies = [
     "torch>=2.0",
     "numpy>=1.26",
     "scipy>=1.12",
-    "huggingface-hub>=0.20",     # Dictionary.from_pretrained
+    "huggingface-hub>=0.20",     # Dictionary.from_hub
     "transformers>=4.40",        # transformer-lens dependency for the quickstart
     "transformer-lens>=2.0",     # live-model activation extraction
 ]

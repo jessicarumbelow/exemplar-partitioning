@@ -1,13 +1,10 @@
 """Pull behavioural.json from the original (Table 2) cells and the matching
-_reanchor cells on the Modal volume, print a per-(p, seed) comparison table
-of refusal-ablation Δ across {mean, exemplar, exemplar_reanchored} bases plus
-the size-and-coherence-matched null.
+_reanchor cells, print a per-(p, seed) comparison table of refusal-ablation
+Δ across {mean, exemplar, exemplar_reanchored} bases plus the
+size-and-coherence-matched null.
 
-Usage:
-    cd ~/research && modal run ep_modal_experiments.py::aggregate_reanchor
-or local:
-    cd ~/research/ep && uv run python -m scripts.aggregate_reanchor \\
-        --vol-mount /path/to/locally/mounted/vol
+Run:
+    uv run python -m scripts.aggregate_reanchor --vol-mount path/to/results-root
 """
 from __future__ import annotations
 
@@ -55,7 +52,8 @@ def _fmt(d: float | None) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--vol-mount", type=Path, required=True,
-                        help="Local mount of the ep-results Modal volume.")
+                        help="Path to the results root containing the "
+                             "per-(p, seed) build directories.")
     args = parser.parse_args()
 
     rows = []

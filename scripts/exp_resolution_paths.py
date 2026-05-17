@@ -16,8 +16,8 @@ Pipeline (single model load):
    k-NN graph between the two assignments.
 5. Save per-dictionary summaries + per-pair path data.
 
-Run on Modal:
-    modal run ep_modal_experiments.py::resolution_paths
+Run:
+    uv run python -m scripts.exp_resolution_paths --dict-paths d1.pkl,d2.pkl,d3.pkl
 """
 
 from __future__ import annotations

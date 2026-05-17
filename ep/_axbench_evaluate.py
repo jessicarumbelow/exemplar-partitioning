@@ -3,14 +3,14 @@
 
 Upstream ``axbench.scripts.evaluate.eval_steering_single_task`` builds the
 LMJudge ``LanguageModel`` with ``master_data_dir="axbench/data"``, ignoring
-``args.master_data_dir``. On Modal that resolves under the read-only mount,
-so ``LanguageModel.__init__`` crashes when it ``mkdir``\\s the
+``args.master_data_dir``. When the baselines checkout is on a read-only
+filesystem, ``LanguageModel.__init__`` crashes when it ``mkdir``\\s the
 ``persist_lm_cache`` inside it.
 
 We monkey-patch the function at import time, in-memory, by re-execing its
 source with ``"axbench/data"`` swapped for an env-var read. ``build_partitions``
-sets ``AXBENCH_MASTER_DATA_DIR`` to the writable ``/vol`` path before launching
-this wrapper. The submodule files on disk are never modified.
+sets ``AXBENCH_MASTER_DATA_DIR`` to a writable path before launching this
+wrapper. The submodule files on disk are never modified.
 
 Invoked as ``python -m ep._axbench_evaluate`` in place of
 ``python -m axbench.scripts.evaluate``. Works because ``evaluate.main()``

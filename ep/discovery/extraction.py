@@ -45,6 +45,12 @@ def extract_per_position(
     forward pass. Tokenization is batched; activations are gathered on the
     model's existing device into a flat (n_kept, D) tensor before a single
     host transfer.
+
+    ``n_tokens`` in the returned :class:`ExtractionResult` counts ALL non-pad
+    tokens (including the BOS that is skipped from extraction). Downstream
+    callers use it as the activation-stream budget, so for context length L
+    the activation count is ``n_tokens * (L - 1) / L`` — within a percent
+    of n_tokens at L=128.
     """
     import torch
 

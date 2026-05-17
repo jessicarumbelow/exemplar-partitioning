@@ -13,18 +13,26 @@ import numpy as np
 
 
 def try_torch_gpu():
-    """Return (torch, device) if CUDA is available, else (None, None).
+    """Return (torch, device) if a GPU is available, else (None, None).
 
-    Shared by the distance/similarity paths in `dictionary`, `calibration`,
-    and `eval` — gates whether GPU matmul kernels are used.
+    CUDA is preferred; Apple Silicon MPS is used as a fallback. Shared by
+    the distance/similarity paths in `dictionary`, `calibration`, and
+    `eval` — gates whether GPU matmul kernels are used.
+
+    Disable with ``EP_FORCE_CPU=1`` if you suspect a backend issue.
     """
+    import os
+    if os.environ.get("EP_FORCE_CPU"):
+        return None, None
     try:
         import torch
     except ImportError:
         return None, None
-    if not torch.cuda.is_available():
-        return None, None
-    return torch, torch.device("cuda")
+    if torch.cuda.is_available():
+        return torch, torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch, torch.device("mps")
+    return None, None
 
 
 def centered_unit(vecs: np.ndarray, mean: np.ndarray | None) -> np.ndarray:

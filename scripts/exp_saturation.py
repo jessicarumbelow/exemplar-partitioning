@@ -9,10 +9,8 @@ The calibration is computed once on the Pile and reused across domains so
 the threshold is identical — without that, per-domain calibration would
 shift the radius and saturation curves wouldn't be comparable.
 
-Run locally:
+Run:
     uv run python -m scripts.exp_saturation --max-tokens 50000
-Run on Modal:
-    modal run ep_modal_experiments.py::saturation
 """
 
 from __future__ import annotations
@@ -122,7 +120,7 @@ def main():
                         help="Comma-separated subset of math,code,chat")
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="ep-properties")
-    parser.add_argument("--wandb-entity", default="jessicamarycooper")
+    parser.add_argument("--wandb-entity", default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
     args = parser.parse_args()
 

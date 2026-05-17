@@ -14,10 +14,8 @@ behaviour?
 Builds on Li et al. 2025 ("The Geometry of Concepts"), which reports
 qualitative semantic-geometric structure in SAE feature dictionaries.
 
-Run locally:
+Run:
     uv run python -m scripts.exp_alignment --dict-path path/to/library.pkl
-Run on Modal:
-    modal run ep_modal_experiments.py::alignment
 """
 
 from __future__ import annotations
@@ -148,7 +146,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="ep-properties")
-    parser.add_argument("--wandb-entity", default="jessicamarycooper")
+    parser.add_argument("--wandb-entity", default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
     args = parser.parse_args()
 

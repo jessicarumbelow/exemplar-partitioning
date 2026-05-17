@@ -26,8 +26,8 @@ Baselines:
 - self_partition: patch with prompt-A's *own* partition exemplar
   (controls for any-direction-at-this-norm effect)
 
-Run on Modal:
-    modal run ep_modal_experiments.py::patching
+Run:
+    uv run python -m scripts.exp_patching --dict-path path/to/dictionary.pkl
 """
 
 from __future__ import annotations
@@ -279,7 +279,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="ep-properties")
-    parser.add_argument("--wandb-entity", default="jessicamarycooper")
+    parser.add_argument("--wandb-entity", default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
     args = parser.parse_args()
 

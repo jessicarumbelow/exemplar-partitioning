@@ -9,10 +9,8 @@ The point: SAEs across layers have unrelated dictionaries; EP at every
 layer is built with the same protocol, so cross-layer transitions are a
 real structural object — discrete dynamics of the model's computation.
 
-Run locally:
+Run:
     uv run python -m scripts.exp_trajectories --max-tokens 100000
-Run on Modal:
-    modal run ep_modal_experiments.py::trajectories
 """
 
 from __future__ import annotations
@@ -235,7 +233,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="ep-properties")
-    parser.add_argument("--wandb-entity", default="jessicamarycooper")
+    parser.add_argument("--wandb-entity", default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
     args = parser.parse_args()
 

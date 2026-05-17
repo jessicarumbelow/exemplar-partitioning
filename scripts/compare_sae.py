@@ -619,6 +619,9 @@ def main():
                              "build_partitions. If set, skip the model-load + "
                              "collect_activations step and read shards instead.")
     parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--wandb-project", default="ep")
+    parser.add_argument("--wandb-entity", default=None,
+                        help="wandb entity (defaults to your wandb auth's default).")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
@@ -793,7 +796,7 @@ def main():
 
     if args.wandb:
         import wandb
-        wandb.init(project="ep", entity="jessicamarycooper",
+        wandb.init(project=args.wandb_project, entity=args.wandb_entity,
                    name=f"compare_sae_{args.model_short}_L{args.layer}")
         for p, per_basis in all_results.items():
             for basis, r in per_basis.items():

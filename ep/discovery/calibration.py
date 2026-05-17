@@ -155,9 +155,13 @@ def _percentile_pairwise_cosine(
         sim = d @ d.T
         iu = torch_mod.triu_indices(n, n, offset=1, device=device)
         dists = 1.0 - sim[iu[0], iu[1]]
-        # torch.quantile caps input at ~16M elements; kthvalue has no size
-        # limit and runs in O(n) average time.
+        # torch.quantile matches np.percentile semantics (linear interpolation
+        # between ranks) but caps input at ~16M elements. Above that, fall back
+        # to kthvalue — the rank-vs-percentile discrepancy is bounded by the
+        # gap between adjacent ranks, which is negligible when n_pairs is huge.
         n_pairs = dists.numel()
+        if n_pairs <= 16_000_000:
+            return float(torch_mod.quantile(dists, percentile / 100.0).item())
         k = max(1, min(n_pairs, int(round((percentile / 100.0) * (n_pairs - 1))) + 1))
         return float(torch_mod.kthvalue(dists, k).values.item())
 

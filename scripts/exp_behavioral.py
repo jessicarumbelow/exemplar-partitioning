@@ -15,10 +15,8 @@ Each partition has a known input set (the prompts that landed in it) — that
 is the EP-distinctive handle. SAE features need a probe to be told what they
 mean; here the input set is the meaning.
 
-Run locally:
+Run:
     uv run python -m scripts.exp_behavioral --n-prompts-per-side 200
-Run on Modal:
-    modal run ep_modal_experiments.py::behavioral
 """
 
 from __future__ import annotations
@@ -210,7 +208,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="ep-properties")
-    parser.add_argument("--wandb-entity", default="jessicamarycooper")
+    parser.add_argument("--wandb-entity", default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--build-only", action="store_true",
                         help="Build the dictionary, pickle it, and exit. "

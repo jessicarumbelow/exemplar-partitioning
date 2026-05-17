@@ -82,7 +82,19 @@ Computation runs wherever the model lives; CUDA is detected automatically.
 
 **Calibration and discovery must use the same extractor.** The threshold is calibrated against the distribution of activations the extractor produces; mixing per-position calibration with final-position discovery (or different context lengths) silently produces meaningless cells. The CLI handles this for you; in Python, pass the same `extract_fn` to both calls.
 
-If you want the calibration cached across runs, use `ep.load_or_calibrate` instead of `ep.calibrate_pipeline`. The cache key is `(model_name, hook_name, percentile, extras)` — pass any extractor- or sampling-specific knobs (e.g. `extras={"extractor": "per-position", "ctx": 128}`) so two calibrations with different settings don't share a cache slot. The CLI uses `extras={"extractor", "sampling", "ctx"}` by default; match those keys to reuse its cache from Python.
+To cache calibration across runs, pass `cache_model_name` to `calibrate_pipeline`:
+
+```python
+calibration = ep.calibrate_pipeline(
+    model, texts, hook,
+    n_tokens=200_000, percentile=10.0,
+    extract_fn=extract_fn,
+    cache_model_name="google/gemma-2-2b",
+    cache_extras={"extractor": "per-position", "ctx": 128},
+)
+```
+
+The cache key is `(cache_model_name, hook_name, percentile, cache_extras)` under `~/.cache/ep/calibration/` (override with `EP_CALIBRATION_CACHE`). Pass any extractor- or sampling-specific knobs in `cache_extras` so two calibrations with different settings don't share a slot. The CLI uses `{"extractor", "sampling", "ctx"}` by default — match those keys to reuse its cache from Python.
 
 ## CLI
 
@@ -154,6 +166,9 @@ partition.member_count                      # int
 partition.member_coherence                  # float in [0, 1]; 1 = all members agree
 partition.closest_prompts                   # list of (dist, prompt, position) — closest first
 partition.farthest_prompts                  # list of (dist, prompt, position) — farthest first
+partition.label                             # Optional[str]. None on hub dictionaries;
+                                            #   populate with scripts/label_dictionary.py
+                                            #   (needs an Anthropic API key).
 ```
 
 A partition has two candidate "representative directions". `exemplar_direction` is the first-arrival activation that anchored the cell — observed, immutable, and the direction used for intervention examples below. `mean_member_direction` is the spherical mean of everything assigned to the cell — a denoised consensus that drifts as the cell fills. The paper benchmarks both at AxBench in §4.1; neither dominates uniformly, so default to `exemplar_direction` for causal interventions (you know exactly what you're injecting) and `mean_member_direction` for read-out / probing (lower variance).
