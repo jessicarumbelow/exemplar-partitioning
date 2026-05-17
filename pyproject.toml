@@ -29,6 +29,7 @@ sae = ["sae-lens>=0.5", "scikit-learn>=1.4"]
 # orchestration, wandb logging, partition labeling.
 scripts = [
     "matplotlib>=3.8",
+    "plotly>=5.20",              # make_fig_neighbourhood.py, sphere_voronoi.py
     "datasets>=2.18",
     "scikit-learn>=1.4",
     "wandb>=0.16",

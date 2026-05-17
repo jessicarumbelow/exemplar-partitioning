@@ -6,7 +6,7 @@ This paper characterises EP as an interpretability object via targeted demonstra
 
 > **Paper:** ["Exemplar Partitioning for Mechanistic Interpretability"](https://arxiv.org/abs/2605.14347) (arXiv:2605.14347).
 >
-> **Prebuilt dictionaries:** [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning) on HuggingFace — Gemma-2-2B (L12 across $p \in \{1, 2, 4, 8, 10\}$, plus L20 at $p=10$) and Gemma-2-2B-it (L4/L12/L20 across $p \in \{1, 2, 4, 8, 10\}$). EP has no training step; the dictionaries are streamed partitions over Pile activations, distributed so you can skip the build. Files are Python pickles — verify the blob SHA on the dataset page before loading.
+> **Prebuilt dictionaries:** [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning) on HuggingFace — Gemma-2-2B (L12 across $p \in \{1, 2, 4, 8, 10\}$, plus L20 at $p=10$) and Gemma-2-2B-it (L4 at $p=4$, L12 at $p=10$, L20 across $p \in \{1, 2, 4, 8, 10\}$). EP has no training step; the dictionaries are streamed partitions over Pile activations, distributed so you can skip the build. Files are Python pickles — verify the blob SHA on the dataset page before loading.
 
 ## Install
 
@@ -30,7 +30,7 @@ import ep
 # the full matrix.
 d = ep.Dictionary.from_hub("gemma-2-2b", layer=12, percentile=10)
 print(d)
-# → Dictionary(5129 partitions, 4231 with ≥2 members, θ=0.0832, ||center||=2.3001)
+# → Dictionary(203 partitions, 203 with ≥2 members, θ=0.8744, ||center||=88.7901)
 
 # Inspect the largest partitions.
 for p in sorted(d.partitions, key=lambda p: -p.member_count)[:3]:
@@ -114,11 +114,13 @@ Useful flags: `--model`, `--layer`, `--percentile`, `--max-tokens`, `--max-promp
 
 `Dictionary.from_hub` pulls from [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning). The matrix:
 
-| Model            | Layers       | Percentiles    |
-|------------------|--------------|----------------|
-| `gemma-2-2b`     | 12           | 1, 2, 4, 8, 10 |
-| `gemma-2-2b`     | 20           | 10             |
-| `gemma-2-2b-it`  | 4, 12, 20    | 1, 2, 4, 8, 10 |
+| Model            | Layer | Percentiles    |
+|------------------|-------|----------------|
+| `gemma-2-2b`     | 12    | 1, 2, 4, 8, 10 |
+| `gemma-2-2b`     | 20    | 10             |
+| `gemma-2-2b-it`  | 4     | 4              |
+| `gemma-2-2b-it`  | 12    | 10             |
+| `gemma-2-2b-it`  | 20    | 1, 2, 4, 8, 10 |
 
 ## What's in a dictionary
 
@@ -186,7 +188,7 @@ tests/                    # pytest suite (run `pytest`)
 ## Tests
 
 ```bash
-pytest                 # ~30s, no GPU required
+pytest                 # ~10s, no GPU required
 ```
 
 ## Citation

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import heapq
 import logging
+import pickle
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -755,7 +756,6 @@ class Dictionary:
                 "Install it (or any of: transformers, datasets) to fetch "
                 "prebuilt dictionaries."
             ) from e
-        import pickle
 
         subdir = f"{model_short}_L{layer}_p{int(percentile)}"
         fname = f"{model_short}_layer{layer}.pkl"
@@ -766,7 +766,7 @@ class Dictionary:
             cache_dir=cache_dir,
         )
         with open(path, "rb") as f:
-            return pickle.load(f)
+            return _LegacyCASCompatUnpickler(f).load()
 
     def __len__(self) -> int:
         return len(self.partitions)
@@ -776,3 +776,20 @@ class Dictionary:
         return (f"Dictionary({len(self.partitions)} partitions, "
                 f"{n_real} with ≥2 members, θ={self.threshold:.4f}, "
                 f"||center||={float(np.linalg.norm(self.center)):.4f})")
+
+
+# Dictionaries published to HuggingFace before the 2026-05-03 cas→ep rename
+# were pickled with module path `cas.discovery.dictionary`. We remap on load
+# so old caches (and users on older `ep` versions whose caches still point at
+# pre-rename blobs) don't hit ModuleNotFoundError.
+class _LegacyCASCompatUnpickler(pickle.Unpickler):
+    _CLASS_REMAP = {
+        ("ep.discovery.dictionary", "ConceptLibrary"): "Dictionary",
+        ("ep.discovery.dictionary", "Concept"): "Partition",
+    }
+
+    def find_class(self, module: str, name: str):
+        if module.startswith("cas."):
+            module = "ep." + module[len("cas."):]
+        name = self._CLASS_REMAP.get((module, name), name)
+        return super().find_class(module, name)
