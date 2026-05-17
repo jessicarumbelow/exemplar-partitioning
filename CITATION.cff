@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software or the published dictionaries, please cite the paper below."
+type: software
+title: "Exemplar Partitioning"
+abstract: "Training-free feature discovery for LLM activations via streaming exemplar partitioning."
+authors:
+  - family-names: Rumbelow
+    given-names: Jessica
+repository-code: "https://github.com/jessicarumbelow/exemplar-partitioning"
+url: "https://github.com/jessicarumbelow/exemplar-partitioning"
+license: MIT
+preferred-citation:
+  type: article
+  title: "Exemplar Partitioning for Mechanistic Interpretability"
+  authors:
+    - family-names: Rumbelow
+      given-names: Jessica
+  year: 2026
+  url: "https://arxiv.org/abs/2605.14347"
+  identifiers:
+    - type: other
+      value: "arXiv:2605.14347"

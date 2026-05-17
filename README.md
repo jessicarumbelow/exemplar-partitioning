@@ -21,7 +21,7 @@ Python ≥ 3.11. CUDA optional but recommended for any model larger than ~160M.
 
 ## Quickstart: load a prebuilt dictionary
 
-The fastest way in is to load one of the published Gemma-2-2B dictionaries — no model load, no build pass, ~10s on a fresh machine:
+The fastest way in is to load one of the published Gemma-2-2B dictionaries — no model load, no build pass. The L12 p=10 build below is ~65 MB and downloads in seconds; the tighter p=1 builds reach 6 GB and take a few minutes on first download. For an interactive tour with cell outputs, open [`notebooks/walkthrough.ipynb`](notebooks/walkthrough.ipynb).
 
 ```python
 import ep
@@ -86,29 +86,46 @@ If you want the calibration cached across runs, use `ep.load_or_calibrate` inste
 
 ## CLI
 
-For full reproducibility runs (Pile streaming, SAEBench / AxBench evals), use the scripts:
+For full reproducibility runs (Pile streaming, SAEBench / AxBench evals), use the scripts. `python -m scripts.build_partitions --help` lists every flag; the recipes below cover the common research goals.
+
+**Just build a dictionary (no eval):**
 
 ```bash
-# Build a dictionary at the canonical p=10 setting.
 python -m scripts.build_partitions \
     --model google/gemma-2-2b --layer 12 \
     --percentile 10 --max-tokens 10_000_000
+```
 
-# Reproduce the headline AxBench AUROC (Gemma-2-2B-it L20 p=1).
+The build flags that control what you get: `--model`, `--model-short` (alias used in output paths), `--layer`, `--percentile` (cell tightness — smaller = more partitions), `--max-tokens` (build budget), `--extractor {per-position,final-position}` (which activations to cluster), `--seed`.
+
+**Reproduce the headline AxBench AUROC (§4.1; Gemma-2-2B-it L20 p=1):**
+
+```bash
 python -m scripts.build_partitions \
     --model google/gemma-2-2b-it --model-short gemma-2-2b-it \
     --layer 20 --percentile 1 --max-tokens 10_000_000 \
     --eval axbench
+```
 
-# SAEBench sparse-probing eval.
+Adds: `--eval axbench`, plus optional `--axbench-max-concepts`, `--axbench-steering-examples`, `--axbench-modes`. Needs an Anthropic API key for partition labelling: `--api-key-file path/to/key`.
+
+**SAEBench sparse-probing eval (§5 / appendix §D):**
+
+```bash
 python -m scripts.build_partitions \
     --model google/gemma-2-2b --layer 12 \
     --percentile 10 --eval sparse_probing
 ```
 
-The eval pathways need third-party repos checked out under `baselines/` — the script prints the exact `git clone` command on first invocation. SAEBench: `https://github.com/adamkarvonen/SAEBench`. AxBench: `https://github.com/stanfordnlp/axbench`.
+Adds: `--eval sparse_probing` and `--readout-override`, `--readout-k`.
 
-Useful flags: `--model`, `--layer`, `--percentile`, `--max-tokens`, `--max-prompts`, `--seed`, `--device`, `--extractor {per-position,final-position}`.
+**Resume / inspect a previous run:**
+
+`--build-only` stops after the dictionary is written; `--aggregate-only` skips the build and just runs the eval against an existing dictionary; `--force-rerun` ignores cached calibration and partial outputs.
+
+**Eval prerequisites.** The eval pathways need third-party repos checked out under `baselines/` — the script prints the exact `git clone` command on first invocation. SAEBench: `https://github.com/adamkarvonen/SAEBench`. AxBench: `https://github.com/stanfordnlp/axbench`.
+
+See [`scripts/README.md`](scripts/README.md) for the full script-to-figure / script-to-section map.
 
 ## Prebuilt dictionaries
 
@@ -143,7 +160,9 @@ A partition has two candidate "representative directions". `exemplar_direction` 
 
 ### Intervention with an exemplar
 
-`exemplar_direction` lives in the centered, unit-norm space the dictionary clusters in. To inject (or ablate) a partition in the model's raw activation space, undo the centering and pick a scale that matches the layer's typical activation norm:
+`exemplar_direction` lives in the centered, unit-norm space the dictionary clusters in. To inject (or ablate) a partition in the model's raw activation space, undo the centering and pick a scale that matches the layer's typical activation norm.
+
+**On `alpha`.** `e` is unit-norm, so `alpha` directly sets how strongly you push along the exemplar in raw activation units. The centroid norm `||d.center||` is a reasonable default — it matches the layer's mean activation magnitude — but the right value depends on what you're testing. A push of `0.5 · ||d.center||` is a gentle nudge; `2-3 · ||d.center||` is a hard override. If you see no behavioural effect, the most common cause is `alpha` too small; the next most common is intervening at the wrong layer.
 
 ```python
 import torch
@@ -163,7 +182,7 @@ def ablate(act, hook):
     return (x - proj).to(act.dtype) + c.to(act)
 ```
 
-The paper's refusal-collapse result (§4.3) uses exactly this ablation pattern on the partition whose exemplar matches the refusal direction in Gemma-2-2B-it L20. To reproduce end-to-end — build the dictionary, score partitions by member refusal rate, ablate the top one on a held-out harmful set — run [`scripts/exp_behavioral.py`](scripts/exp_behavioral.py); the per-percentile plotting (`make_fig_refusal.py`) consumes its JSON outputs.
+The paper's refusal-collapse result (§4.1 "Behaviour localisation and causal ablation" paragraph, full sweep in appendix §A.2) uses exactly this ablation pattern on the partition whose exemplar matches the refusal direction in Gemma-2-2B-it L20. To reproduce end-to-end — build the dictionary, score partitions by member refusal rate, ablate the top one on a held-out harmful set — run [`scripts/exp_behavioral.py`](scripts/exp_behavioral.py); the per-percentile plotting (`make_fig_refusal.py`) consumes its JSON outputs.
 
 ## Repository layout
 
