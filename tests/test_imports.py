@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
 
 def test_top_level_imports():
     from ep import (  # noqa: F401
@@ -80,3 +85,39 @@ def test_no_legacy_modules():
             continue
         else:
             raise AssertionError(f"{name} should have been removed")
+
+
+def test_dictionary_import_without_torch_available():
+    code = textwrap.dedent(
+        """
+        import importlib.abc
+        import sys
+
+        import numpy as np
+
+
+        class BlockTorch(importlib.abc.MetaPathFinder):
+            def find_spec(self, fullname, path=None, target=None):
+                if fullname == "torch" or fullname.startswith("torch."):
+                    raise ModuleNotFoundError("No module named 'torch'", name="torch")
+                return None
+
+
+        sys.meta_path.insert(0, BlockTorch())
+
+        import ep
+        from ep.discovery import Dictionary
+
+        ep.set_seed(123)
+        d = Dictionary(center=np.zeros(2, dtype=np.float32), threshold=0.5)
+        print("ok", len(d))
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[1],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "ok 0"
