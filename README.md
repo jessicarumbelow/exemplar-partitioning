@@ -2,7 +2,7 @@
 
 We introduce Exemplar Partitioning (EP), an unsupervised method for constructing interpretable feature dictionaries from Large Language Model (LLM) activations with ~10³× fewer tokens than comparable sparse autoencoders. An EP dictionary is a Voronoi partition of centered, unit-norm activation space, built by leader-clustering streamed activations within a cosine-distance threshold. Each region is anchored by an observed exemplar that serves as both its membership criterion and intervention direction; dictionary size is not prespecified, but determined by the activation geometry at that threshold. Because exemplars are observed rather than learned, dictionaries built from the same data stream are directly comparable across layers, models, and training checkpoints.
 
-This paper characterises EP as an interpretability object via targeted demonstrations of properties newly accessible through this construction, plus one head-to-head benchmark. In Gemma-2-2b, we find that EP dictionary regions are interpretable and support causal interventions: refusal in instruction-tuned Gemma concentrates in a region whose exemplar ablation can collapse held-out refusal. Cross-checkpoint matching between base and instruction-tuned dictionaries separates the directions preserved through finetuning from those introduced by it. EP regions and Gemma Scope SAE features decompose activation space differently, but agree on a shared core: ~20% of EP regions match an SAE feature at F₁ > 0.5, and EP one-hot probes retain ~97% of raw-activation probe accuracy at ℓ₀ = 1: the linearly-decodable identity that probing tests is largely preserved by density structure alone. Nearest-exemplar distance provides a free out-of-distribution signal at inference. On AxBench latent concept detection at Gemma-2-2B-it L20, EP at p₁ reaches mean AUROC 0.881, +0.126 over the canonical GemmaScope SAE leaderboard entry and within 0.030 of SAE-A's 0.911, at ~10³× less build compute. Code: [github.com/jessicarumbelow/exemplar-partitioning](https://github.com/jessicarumbelow/exemplar-partitioning).
+This paper characterises EP through targeted demonstrations and one head-to-head benchmark. On AxBench latent concept detection at Gemma-2-2B-it L20, EP at p₁ reaches mean AUROC 0.935 with the region mean as detector under SAE-A's own selection rule, above SAE-A's 0.911 and +0.180 over the canonical GemmaScope SAE leaderboard entry, at ~10³× less build compute (0.881 with the exemplar under the reviewed version's contrast rule). Shared prompt exemplars also make independently built dictionaries directly comparable: mean round-trip correspondence between wholly harmful Gemma and Llama regions rises from 19% in the base models to 44% after instruction tuning. Across all 21 Taboo model organisms, one of the two regions with the largest fine-tuned-minus-base occupancy decodes the planted secret among its top four embedding tokens in 13 cases and among its top 20 in 16, without using the secret to select the region. EP regions and Gemma Scope SAE features agree selectively: roughly 20% of EP regions have a strong SAE counterpart at p₁₀. Under the native one-hot readout, EP retains 98% of raw-activation top-1 probe accuracy and 82% of test accuracy at p₁₀; test-accuracy retention rises to 91% at p₁. Nearest-exemplar distance provides an out-of-distribution signal at inference. Code: [github.com/jessicarumbelow/exemplar-partitioning](https://github.com/jessicarumbelow/exemplar-partitioning).
 
 > **Paper:** ["Exemplar Partitioning for Mechanistic Interpretability"](https://arxiv.org/abs/2605.14347) (arXiv:2605.14347).
 >
@@ -113,13 +113,25 @@ The build flags that control what you get: `--model`, `--model-short` (alias use
 **Reproduce the headline AxBench AUROC (§4.1; Gemma-2-2B-it L20 p=1):**
 
 ```bash
+# Test rows used in the paper (so no LLM calls are needed to regenerate them).
+python -c "from huggingface_hub import hf_hub_download as d; print(d('J-RUM/exemplar-partitioning', 'axbench/gemma-2-2b-it_L20_p1_latent_data.parquet', repo_type='dataset'))"
+
 python -m scripts.build_partitions \
     --model google/gemma-2-2b-it --model-short gemma-2-2b-it \
-    --layer 20 --percentile 1 --max-tokens 10_000_000 \
-    --eval axbench
+    --layer 20 --percentile 1 --max-tokens 100_000_000 \
+    --eval axbench --axbench-modes latent \
+    --axbench-selection auroc \
+    --axbench-latent-data /path/printed/above/gemma-2-2b-it_L20_p1_latent_data.parquet \
+    --axbench-act-cache-dir ~/.cache/ep/axbench-acts
 ```
 
-Adds: `--eval axbench`, plus optional `--axbench-max-concepts`, `--axbench-steering-examples`, `--axbench-modes`. Needs an Anthropic API key for partition labelling: `--api-key-file path/to/key`.
+The p₂/p₄/p₈ rows of the table use `--max-tokens 10_000_000` and the matching parquet (`..._L20_p{2,4,8}_latent_data.parquet`).
+
+How the region is chosen per concept is `--axbench-selection`. `auroc` is AxBench's own SAE-A rule (`GemmaScopeSAEMaxAUC`): max cosine over the positions of each training sequence, then the region with the highest training-set AUROC. It is the protocol the paper reports. `contrast` is the rule used in the reviewed version: mean cosine over all positive tokens minus mean over all negative tokens. Both representatives (exemplar and region mean) are scored in the same run; the selection always uses the representative that is then scored.
+
+`--axbench-latent-data` replays the test rows from an earlier run's `inference/latent_data.parquet` verbatim. Without it AxBench regenerates the test set through the OpenAI API (`OPENAI_API_KEY`), which is what produced the published rows in the first place. `--axbench-act-cache-dir` stores every residual activation the eval computes, keyed by token ids, so a second selection rule or representative reruns in minutes. `--axbench-dump-tag NAME` writes outputs to `axbench_NAME/` instead of `axbench/`, so reruns never overwrite an earlier result.
+
+Other options: `--axbench-max-concepts` (smoke test on a prefix of the 500 concepts), `--axbench-steering-examples`, `--axbench-modes` (`latent,steering,steering_test`; the steering modes need OpenAI for the LM judge). Partition labelling needs an Anthropic API key: `--api-key-file path/to/key`.
 
 **SAEBench sparse-probing eval (§5 / appendix §D):**
 
@@ -138,6 +150,19 @@ Adds: `--eval sparse_probing` and `--readout-override`, `--readout-k`.
 **Eval prerequisites.** The eval pathways need third-party repos checked out under `baselines/` — the script prints the exact `git clone` command on first invocation. SAEBench: `https://github.com/adamkarvonen/SAEBench`. AxBench: `https://github.com/stanfordnlp/axbench`.
 
 See [`scripts/README.md`](scripts/README.md) for the full script-to-figure / script-to-section map.
+
+The revision experiments are also available as module entrypoints. The Taboo pipeline is split into generation/build, occupancy scoring, fixed-token extraction, and auditing:
+
+```bash
+python -m scripts.exp_taboo --help
+python -m scripts.exp_taboo_occupancy --help
+python -m scripts.exp_taboo_control --help
+python -m scripts.exp_taboo_audit --help
+```
+
+Run `python -m scripts.exp_resolution_separation --help` for the ordered-colour resolution toy and `python -m scripts.exp_refusal_direction --help` for the cross-family intervention experiment. Small saved summaries are in [`results/revision/`](results/revision/), including the complete 21-organism Taboo table. The harmful-prompt corpus is not distributed; the cross-family verifiers accept locally constructed data and caches.
+
+GPU reproduction for the Taboo and ordered-colour experiments is available through [`modal/revision_experiments.py`](modal/revision_experiments.py). The wrapper mounts the public `ep` package directly and does not depend on the former private `cas` package. The saved Taboo resolution, layer, and secret-text controls are in [`results/revision/taboo_robustness.json`](results/revision/taboo_robustness.json).
 
 ## Prebuilt dictionaries
 
@@ -171,7 +196,7 @@ partition.label                             # Optional[str]. None on hub diction
                                             #   (needs an Anthropic API key).
 ```
 
-A partition has two candidate "representative directions". `exemplar_direction` is the first-arrival activation that anchored the cell — observed, immutable, and the direction used for intervention examples below. `mean_member_direction` is the spherical mean of everything assigned to the cell — a denoised consensus that drifts as the cell fills. The paper benchmarks both at AxBench in §4.1; neither dominates uniformly, so default to `exemplar_direction` for causal interventions (you know exactly what you're injecting) and `mean_member_direction` for read-out / probing (lower variance).
+A partition has two candidate representatives, which the paper calls the exemplar and the region mean. `exemplar_direction` is the first-arrival activation that anchored the cell — observed, immutable, traceable to the prompt and token that produced it, and the one used for the intervention examples below. `mean_member_direction` is the mean of everything assigned to the cell — smoother, but not a real activation and with no prompt behind it. The paper benchmarks both at AxBench in §4.1: under SAE-A's selection rule the region mean is the better detector at every resolution (0.935 vs 0.828 at p₁), because a single activation gives a spiky max-over-positions score that lets one generic region win the training-set selection for many concepts. So default to `mean_member_direction` for read-out / probing and `exemplar_direction` for causal interventions and for anything you need to trace back to data.
 
 ### Intervention with an exemplar
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import pickle
 import sys
 import time
@@ -19,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SAEBENCH_ROOT = REPO_ROOT / "baselines" / "SAEBench"
-AXBENCH_ROOT = REPO_ROOT / "baselines" / "axbench"
+# The Modal image mounts the AxBench checkout outside the ep tree; EP_AXBENCH_ROOT
+# points at it there.
+AXBENCH_ROOT = Path(os.environ.get("EP_AXBENCH_ROOT") or REPO_ROOT / "baselines" / "axbench")
 if SAEBENCH_ROOT.exists():
     sys.path.insert(0, str(SAEBENCH_ROOT))
 
@@ -47,7 +50,7 @@ DEFAULT_MODEL_SHORT = "gemma-2-2b"
 DEFAULT_LAYER = 12
 
 import ep  # noqa: F401 - apply any compatibility shims
-from ep.discovery.dictionary import _cosine_pairwise
+from ep.discovery.dictionary import _LegacyCASCompatUnpickler, _cosine_pairwise
 from ep.discovery.pipeline import DiscoveryResult, discover
 
 
@@ -270,7 +273,9 @@ def load_dictionary(output_dir: Path, model_short: str, layer: int):
     if not path.exists():
         raise FileNotFoundError(path)
     with path.open("rb") as f:
-        dictionary = pickle.load(f)
+        # Dictionaries on the volume built before the cas→ep rename pickle
+        # under `cas.*`; the compat unpickler remaps them.
+        dictionary = _LegacyCASCompatUnpickler(f).load()
     logger.info("Loaded dictionary (%d partitions) from %s", len(dictionary), path)
     return dictionary
 
@@ -1470,7 +1475,7 @@ def _run_axbench(args, dictionary) -> None:
         )
         return
 
-    dump_dir = args.output_dir / "axbench"
+    dump_dir = _axbench_dump_dir(args.output_dir, args.axbench_dump_tag)
     dump_dir.mkdir(parents=True, exist_ok=True)
 
     _ensure_axbench_ep_module(axbench_root)
@@ -1573,6 +1578,13 @@ def _run_axbench(args, dictionary) -> None:
     # ep_library_path field in the sweep never reaches the EP model. Pass it
     # via env var instead.
     env["EP_LIBRARY_PATH"] = str(pkl_path)
+    # Region-selection rule and activation cache for ep._axbench_ep (see its
+    # module docstring). Env for the same reason as EP_LIBRARY_PATH.
+    env["EP_AXBENCH_SELECTION"] = args.axbench_selection
+    if args.axbench_act_cache_dir:
+        env["EP_ACT_CACHE_DIR"] = str(args.axbench_act_cache_dir)
+    if args.axbench_latent_data:
+        env["EP_AXBENCH_LATENT_DATA"] = str(args.axbench_latent_data)
     # evaluate.py:384 hardcodes master_data_dir="axbench/data" for the LMJudge
     # cache. When the baselines checkout is on a read-only filesystem, override
     # via env so the LM cache lands on a writable path alongside the seed data.
@@ -1621,7 +1633,13 @@ def _run_axbench(args, dictionary) -> None:
             logger.warning("AxBench evaluate --mode %s failed", mode)
 
 
-def _read_axbench_metrics(output_dir: Path) -> dict[str, dict[str, float]]:
+def _axbench_dump_dir(output_dir: Path, tag: str = "") -> Path:
+    """AxBench outputs live at <output_dir>/axbench; a tag gives a rerun with a
+    different selection rule its own directory so the original is kept."""
+    return output_dir / ("axbench" + (f"_{tag}" if tag else ""))
+
+
+def _read_axbench_metrics(output_dir: Path, tag: str = "") -> dict[str, dict[str, float]]:
     """Pull per-method headline metrics from AxBench's evaluate output.
 
     Reproduces axbench/scripts/analyse.ipynb cell 4 (format_df):
@@ -1634,7 +1652,7 @@ def _read_axbench_metrics(output_dir: Path) -> dict[str, dict[str, float]]:
     Returns ``{method_name: {metric: value}}``. Missing files / methods just
     don't populate the dict — caller treats absence as NaN.
     """
-    eval_dir = output_dir / "axbench" / "evaluate"
+    eval_dir = _axbench_dump_dir(output_dir, tag) / "evaluate"
     if not eval_dir.exists():
         return {}
 
@@ -1721,7 +1739,7 @@ def _log_per_eval_scalars(args, eval_types: list[str]) -> None:
     payload: dict[str, float] = {}
     for et in eval_types:
         if et == "axbench":
-            metrics = _read_axbench_metrics(args.output_dir)
+            metrics = _read_axbench_metrics(args.output_dir, args.axbench_dump_tag)
             for method, m in metrics.items():
                 for k, v in m.items():
                     if isinstance(v, (int, float)):
@@ -1878,7 +1896,8 @@ def _log_headline_table(
         compare, compare_sae_width = _read_compare_sae(args.output_dir)
     else:
         compare, compare_sae_width = {}, None
-    axbench_metrics = _read_axbench_metrics(args.output_dir) if run_axbench else {}
+    axbench_metrics = (_read_axbench_metrics(args.output_dir, args.axbench_dump_tag)
+                       if run_axbench else {})
 
     # AxBench's per-method JSON keys for the EP entries (wired in _run_axbench).
     AXBENCH_EP_NAMES = {"mean": "EPMean", "exemplar": "EPExemplar"}
@@ -2156,6 +2175,25 @@ def main() -> None:
                             help="Comma-separated list of AxBench modes to run. "
                                  "Default 'latent,steering,steering_test' runs all. "
                                  "Use 'latent' alone for the headline AUROC only.")
+    eval_group.add_argument("--axbench-selection", choices=("contrast", "auroc"),
+                            default="auroc",
+                            help="How the EP region is picked per concept from the "
+                                 "training examples. auroc (default, reported in the "
+                                 "paper) = AxBench's SAE-A rule: per-sequence max "
+                                 "cosine, then training-set AUROC. contrast = the "
+                                 "reviewed version's rule: token-mean cosine, "
+                                 "positives minus negatives.")
+    eval_group.add_argument("--axbench-dump-tag", type=str, default="",
+                            help="Write AxBench outputs to axbench_<tag>/ instead of "
+                                 "axbench/, so a rerun never touches the original.")
+    eval_group.add_argument("--axbench-latent-data", type=Path, default=None,
+                            help="Reuse the latent test rows from this earlier "
+                                 "inference latent_data.parquet instead of "
+                                 "regenerating them (no LLM calls).")
+    eval_group.add_argument("--axbench-act-cache-dir", type=Path, default=None,
+                            help="Cache residual activations for every AxBench "
+                                 "sequence here; reruns read them instead of "
+                                 "running the model.")
 
     args = parser.parse_args()
 

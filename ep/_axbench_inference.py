@@ -22,8 +22,37 @@ rebinding the names in ``_inf.__dict__`` is enough.
 from ep import _axbench_bootstrap  # noqa: F401  must run before `import axbench`
 
 import inspect
+import os
 
 from axbench.scripts import inference as _inf
+
+# EP_AXBENCH_LATENT_DATA: path to a latent_data.parquet from an earlier
+# inference run. When set, the latent eval reuses that run's test rows for
+# every concept instead of regenerating them through the LLM, so two
+# selection rules can be compared on an identical test set with no OpenAI
+# dependency. Rows are used verbatim (they are already chat-templated), so
+# the prepare_df re-templating step is skipped for them.
+_LATENT_DATA = os.environ.get("EP_AXBENCH_LATENT_DATA") or None
+_LATENT_DF = None
+
+
+def _create_data_latent_from_parquet(dataset_factory, metadata, concept_id, num_of_examples, args):
+    global _LATENT_DF
+    import pandas as pd
+    if _LATENT_DF is None:
+        df = pd.read_parquet(_LATENT_DATA)
+        keep = [c for c in df.columns
+                if c != "tokens" and c.split("_")[0] not in {"EPExemplar", "EPMean", "PromptSteering"}]
+        _LATENT_DF = df[keep]
+    current_df = _LATENT_DF[_LATENT_DF["concept_id"] == concept_id].copy().reset_index(drop=True)
+    if current_df.empty:
+        raise RuntimeError(f"EP_AXBENCH_LATENT_DATA has no rows for concept_id={concept_id}")
+    current_df["_pretemplated"] = True
+    return current_df
+
+
+if _LATENT_DATA:
+    _inf.create_data_latent = _create_data_latent_from_parquet
 
 
 _NEEDLE = (
@@ -50,6 +79,12 @@ def _patched(fn):
     # dumps silently drop everything. Re-spending the LLM-judge bill on
     # every restart is the symptom; this flip is the fix.
     src = src.replace("use_cache=False,", "use_cache=True,")
+    # Rows served from EP_AXBENCH_LATENT_DATA are already templated.
+    src = src.replace(
+        "current_df = prepare_df(current_df, tokenizer, is_chat_model, args.model_name)",
+        "current_df = current_df if '_pretemplated' in current_df "
+        "else prepare_df(current_df, tokenizer, is_chat_model, args.model_name)",
+    )
     ns = dict(_inf.__dict__)
     exec(src, ns)
     return ns[fn.__name__]
@@ -67,7 +102,6 @@ _inf.infer_latent_on_train_data = _patched(_inf.infer_latent_on_train_data)
 # pkl is therefore never found on resume, and every restart re-processes
 # all concepts from 0. Override save_state to write where load_state will
 # look.
-import os as _os
 import pickle as _pickle
 from pathlib import Path as _Path
 
