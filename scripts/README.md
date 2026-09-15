@@ -1,6 +1,6 @@
 # Scripts
 
-Forty scripts, grouped by purpose. Most have a top-of-file docstring and a `Run:` line; this index is for finding the right one fast.
+Scripts are grouped by purpose. Most have a top-of-file docstring and a `Run:` line; this index is for finding the right one fast.
 
 Every script is invoked as a module from the repo root:
 
@@ -34,6 +34,16 @@ These produce the JSON / NPZ inputs that the figure-makers below consume.
 | `exp_per_region_stability.py`     | §2.2 + app. §A.7             | Per-region (not aggregate) stability across builds.                                                                          |
 | `exp_stability_predictor.py`      | §2.2 + app. §A.7             | Whether $D_i = \log_{10}(N_i c_i^2)$ predicts cross-seed region stability.                                                   |
 | `exp_behavioral.py`               | §4.1 + app. §A.2             | Refusal collapse. Build EP on AdvBench + Alpaca at L20 of `gemma-2-2b-it`, score partitions by member refusal rate, ablate the top one. |
+| `exp_refusal_direction.py`        | Cross-family comparison       | Extract, score, and intervene on the harmful-minus-benign direction across Gemma and Llama layers. Requires a locally built prompt corpus. |
+| `build_refusal_directions.py`     | Cross-family comparison       | Build EP, prompt-mean, and shuffled-control refusal directions from local activations, assignment caches, and a user-supplied prompt JSON. |
+| `exp_taboo.py`                    | Planted representation        | Generate Taboo hint transcripts and build fine-tuned/base dictionaries. |
+| `exp_taboo_occupancy.py`          | Planted representation        | Rank Taboo regions by fine-tuned-minus-base occupancy and compute vocabulary readouts. |
+| `exp_taboo_control.py`            | Planted representation        | Extract the two fixed assistant-prefix activations used by the 21-organism result. |
+| `exp_taboo_audit.py`              | Planted representation        | Compare transcript-only and transcript-plus-region secret auditors. |
+| `exp_resolution_separation.py`    | Resolution                    | Run the ordered-colour toy and report when coarse identities split into ordered pairs. |
+| `verify_text_baseline.py`         | Cross-family comparison       | TF--IDF $k$-means control for harmful/benign separation. Accepts a locally constructed prompt JSON; the harmful corpus is not distributed. |
+| `build_crossfamily_cache.py`      | Cross-family comparison       | Build the per-layer assignment cache from a saved `(prompts, layers, hidden_dim)` activation array, with no hard-coded scratch paths. |
+| `verify_crossfamily.py`           | Cross-family comparison       | Recompute the 100%-harmful round-trip grid from the four assignment caches without model inference. |
 
 ## Exploratory experiments (not in the published paper)
 

@@ -18,6 +18,36 @@ from scipy.spatial import SphericalVoronoi
 from sklearn.decomposition import PCA
 
 
+def compute_logit_lens_labels(
+    dictionary,
+    model,
+    k: int = 5,
+    use_mean: bool = False,
+) -> list[str]:
+    """Top-k vocab tokens per partition via the logit lens.
+
+    Projects each exemplar (or mean-member) direction through
+    ``ln_final · W_U`` and decodes the top-k token IDs. Centered unit
+    directions in, comma-joined token strings out.
+    """
+    import torch
+    attr = "mean_member_direction" if use_mean else "exemplar_direction"
+    directions = np.stack([getattr(p, attr) for p in dictionary.partitions])
+    out: list[str] = []
+    with torch.no_grad():
+        batch = 256
+        for i in range(0, len(directions), batch):
+            v = torch.tensor(directions[i:i + batch],
+                             dtype=model.W_U.dtype, device=model.W_U.device)
+            v = model.ln_final(v)
+            logits = v @ model.W_U
+            top_ids = logits.topk(k).indices.cpu().tolist()
+            for row in top_ids:
+                toks = [model.tokenizer.decode([tid]).strip() for tid in row]
+                out.append(", ".join(t for t in toks if t))
+    return out
+
+
 def _project_to_sphere(directions: np.ndarray) -> np.ndarray:
     coords = PCA(n_components=3).fit_transform(directions)
     return coords / np.linalg.norm(coords, axis=1, keepdims=True)
@@ -60,7 +90,7 @@ def _partition_snippet(p, max_chars: int = 60) -> str:
     return snippet
 
 
-def _click_toggle_post_script(markers_idx: int) -> str:
+def _click_toggle_post_script(markers_idx: int, default_pinned_indices: list[int] | None = None) -> str:
     """JS injected into the HTML.
 
     On every mousemove we project all exemplar 3D points to screen
@@ -73,10 +103,23 @@ def _click_toggle_post_script(markers_idx: int) -> str:
 
     Camera moves clear hover and pinned tooltips (their fixed screen
     positions stop corresponding to underlying 3D points).
+
+    ``default_pinned_indices`` controls which labels are pinned on load.
+    ``None`` = all (legacy behaviour); empty list = none; otherwise that
+    explicit subset.
     """
+    import json
+    default_js = (
+        "null" if default_pinned_indices is None
+        else json.dumps(list(default_pinned_indices))
+    )
     return f"""
+var DEFAULT_PINNED = {default_js};
 var gd = document.getElementById('{{plot_id}}');
 var MARKERS = {markers_idx};
+// Set of indices the page starts with pinned. null = all.
+var INITIAL_PINNED_SET = DEFAULT_PINNED === null ? null :
+    new Set(DEFAULT_PINNED);
 var pinned = new Map();
 var hoverDiv = null;
 
@@ -317,13 +360,18 @@ function repositionPinned() {{
     }});
 }}
 
-// Pin every cell's label. repositionPinned hides labels for
+// Pin a chosen subset's labels. repositionPinned hides labels for
 // back-facing cells so only the visible hemisphere shows at any time.
-function pinAll() {{
+// indices === null means "all".
+function pinSubset(indices) {{
     var proj = projectAll();
-    if (!proj) {{ setTimeout(pinAll, 200); return; }}
+    if (!proj) {{ setTimeout(function() {{ pinSubset(indices); }}, 200); return; }}
     clearPinned();
-    for (var i = 0; i < EX_N; i++) {{
+    var loop = indices === null
+        ? (function() {{ var a = []; for (var i = 0; i < EX_N; i++) a.push(i); return a; }})()
+        : indices;
+    for (var j = 0; j < loop.length; j++) {{
+        var i = loop[j];
         var p = proj[i]; if (!p) continue;
         var div = document.createElement('div');
         div.className = 'sphere-tooltip';
@@ -335,13 +383,13 @@ function pinAll() {{
     }}
     repositionPinned();
 }}
-setTimeout(pinAll, 600);
+function pinAll() {{ pinSubset(null); }}
+setTimeout(function() {{ pinSubset(DEFAULT_PINNED); }}, 600);
 
 // Show-all / hide-all toggle button, fixed top-right.
+// Text adapts to whether any labels are currently pinned.
 (function() {{
-    var allShown = true;
     var btn = document.createElement('button');
-    btn.textContent = 'Hide all labels';
     btn.style.position = 'fixed';
     btn.style.top = '10px';
     btn.style.right = '10px';
@@ -353,18 +401,15 @@ setTimeout(pinAll, 600);
     btn.style.cursor = 'pointer';
     btn.style.fontFamily = 'system-ui, sans-serif';
     btn.style.fontSize = '12px';
+    function refreshLabel() {{
+        btn.textContent = pinned.size === EX_N ? 'Hide all labels' : 'Show all labels';
+    }}
     btn.addEventListener('click', function() {{
-        if (allShown) {{
-            clearPinned();
-            btn.textContent = 'Show all labels';
-            allShown = false;
-        }} else {{
-            pinAll();
-            btn.textContent = 'Hide all labels';
-            allShown = true;
-        }}
+        if (pinned.size === EX_N) {{ clearPinned(); }} else {{ pinAll(); }}
+        refreshLabel();
     }});
     document.body.appendChild(btn);
+    setTimeout(refreshLabel, 800);
 }})();
 
 // Track drag vs click so camera-orbit drags don't fire pin events.
@@ -444,9 +489,12 @@ def render(
     label_mode: str = "click",
     labels: list[str] | None = None,
     png: Path | None = None,
-    image_width: int = 1200,
-    image_height: int = 1200,
-    image_scale: float = 2.0,
+    image_width: int = 2400,
+    image_height: int = 2400,
+    image_scale: float = 1.0,
+    label_pct: float = 100.0,
+    label_seed: int = 0,
+    label_font_size: int | None = None,
 ) -> None:
     """Render an interactive sphere with click-to-toggle labels.
 
@@ -454,9 +502,13 @@ def render(
     partition). Otherwise we fall back to a snippet of the closest sample
     prompt — useful for back-compat / local runs without a model loaded.
 
-    If ``png`` is given, also write a static PNG (dots + cell edges only —
-    labels live in browser JS and so don't appear in the static export,
-    which is fine for paper figures).
+    ``label_pct`` (0-100) controls how many labels are pinned on HTML load
+    AND rendered into the static PNG. 100 = all (HTML default; PNG would
+    be unreadable for large K). 0 = none. Subset is drawn with
+    ``label_seed`` for reproducibility.
+
+    If ``png`` is given, also write a static PNG. With ``label_pct=0`` it's
+    dots + cell edges only.
     """
     partitions = list(dictionary.partitions)
     if len(partitions) < 5:
@@ -515,6 +567,23 @@ def render(
     if labels is None:
         labels = [_partition_snippet(p) for p in partitions]
 
+    # Pick the subset of partitions whose labels appear on HTML load /
+    # in the PNG. Random sample without replacement, seeded.
+    n = len(points)
+    pct = max(0.0, min(100.0, float(label_pct)))
+    n_labels_to_show = int(round(n * pct / 100.0))
+    if n_labels_to_show >= n:
+        label_indices: list[int] | None = None  # signal "all" to the JS
+        png_label_indices = list(range(n))
+    elif n_labels_to_show <= 0:
+        label_indices = []
+        png_label_indices = []
+    else:
+        rng = np.random.default_rng(label_seed)
+        chosen = rng.choice(n, size=n_labels_to_show, replace=False)
+        label_indices = sorted(int(i) for i in chosen)
+        png_label_indices = label_indices
+
     # Small black markers at exemplar positions so each cell has a
     # visible anchor for its label. Hover/click handled in JS via
     # mousemove + nearest-projected-exemplar (see post_script).
@@ -545,9 +614,9 @@ def render(
     fig.write_html(
         output,
         include_plotlyjs="cdn",
-        post_script=_click_toggle_post_script(markers_trace_idx),
+        post_script=_click_toggle_post_script(markers_trace_idx, label_indices),
     )
-    print(f"wrote {output}")
+    print(f"wrote {output}  ({n_labels_to_show}/{n} labels pinned on load)")
 
     if png is not None:
         try:
@@ -562,43 +631,139 @@ def render(
         # export so the sphere fills the frame.
         static = go.Figure(fig)
         static.update_layout(title=None, margin=dict(l=0, r=0, t=0, b=0))
+
+        if png_label_indices:
+            # Scene annotations carry the same white-pill styling as the HTML
+            # tooltips (bgcolor/bordercolor/borderpad). Scatter3d text mode
+            # would draw glyphs only — unreadable against the dot field.
+            # Back-facing annotations still render (no z-cull in plotly 3D),
+            # but the bg makes both sides legible.
+            #
+            # Font size scales with canvas width by default so labels stay
+            # readable at 8k+; baseline is ~11pt at 2400px.
+            if label_font_size is not None:
+                fsize = int(label_font_size)
+            else:
+                fsize = max(11, int(round(image_width / 220)))
+            borderpad = max(3, int(round(fsize / 4)))
+            yshift = max(10, int(round(fsize * 1.0)))
+            annotations = [
+                dict(
+                    x=float(points[i, 0]),
+                    y=float(points[i, 1]),
+                    z=float(points[i, 2]),
+                    text=labels[i],
+                    showarrow=False,
+                    yshift=yshift,
+                    bgcolor="rgba(255,255,255,0.94)",
+                    bordercolor="#888",
+                    borderwidth=max(1, fsize // 12),
+                    borderpad=borderpad,
+                    font=dict(size=fsize, color="#111",
+                              family="system-ui, sans-serif"),
+                )
+                for i in png_label_indices
+            ]
+            static.update_layout(scene=dict(annotations=annotations))
+
         static.write_image(
             png, width=image_width, height=image_height, scale=image_scale,
         )
         print(f"wrote {png}  ({image_width * image_scale:.0f}×"
-              f"{image_height * image_scale:.0f}px)")
+              f"{image_height * image_scale:.0f}px, "
+              f"{len(png_label_indices)} labels)")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--output-dir", type=Path, required=True,
-                    help="dictionary root (same as build_partitions --output-dir)")
+    ap.add_argument("--output-dir", type=Path, default=None,
+                    help="dictionary root (same as build_partitions "
+                         "--output-dir). Omit if using --from-hub-percentile.")
     ap.add_argument("--model-short", type=str, required=True)
     ap.add_argument("--layer", type=int, required=True)
+    ap.add_argument("--from-hub-percentile", type=int, default=None,
+                    help="If set, skip --output-dir and load the prebuilt "
+                         "dictionary at this percentile from HuggingFace.")
     ap.add_argument("--out", type=Path, default=Path("sphere_voronoi.html"))
     ap.add_argument("--png", type=Path, default=None,
                     help="if set, also write a high-res PNG (dots only, "
                          "no labels). Needs kaleido.")
-    ap.add_argument("--width", type=int, default=1200,
-                    help="PNG width in CSS pixels; effective resolution = "
-                         "width × scale. Default 1200.")
-    ap.add_argument("--height", type=int, default=1200,
-                    help="PNG height in CSS pixels. Default 1200.")
-    ap.add_argument("--scale", type=float, default=2.0,
-                    help="PNG pixel density multiplier (kaleido). "
-                         "Default 2.0 → 2400×2400 at default width/height.")
+    ap.add_argument("--width", type=int, default=2400,
+                    help="PNG width in pixels. Default 2400.")
+    ap.add_argument("--height", type=int, default=2400,
+                    help="PNG height in pixels. Default 2400.")
+    ap.add_argument("--scale", type=float, default=1.0,
+                    help="Kaleido DPI multiplier. Leave at 1.0 — bumping it "
+                         "above 1 inflates marker size in physical pixels "
+                         "(scatter3d sizes are logical-px, scaled). For more "
+                         "resolution, raise --width/--height instead.")
+    ap.add_argument("--label-pct", type=float, default=100.0,
+                    help="Percent of labels (0-100) to pin on HTML load AND "
+                         "render into the PNG. 100=all (HTML default; "
+                         "unreadable for large K in PNG). 0=none.")
+    ap.add_argument("--label-seed", type=int, default=0,
+                    help="Seed for the random label subset.")
+    ap.add_argument("--label-font-size", type=int, default=None,
+                    help="Override PNG label font size (pt). Default "
+                         "auto-scales with --width (≈11pt at 2400px).")
+    ap.add_argument("--logit-lens", action="store_true",
+                    help="Label each partition with top-k logit-lens tokens "
+                         "for its exemplar direction (instead of prompt "
+                         "snippets). Loads the model — needs GPU/MPS for "
+                         "anything bigger than ~1B params.")
+    ap.add_argument("--logit-lens-k", type=int, default=5,
+                    help="Top-k tokens to show per partition. Default 5.")
+    ap.add_argument("--logit-lens-mean", action="store_true",
+                    help="Project the spherical-mean direction instead of "
+                         "the exemplar. Quieter labels for high-coherence "
+                         "cells, noisier for low.")
+    ap.add_argument("--model-name", type=str, default=None,
+                    help="HF model id for --logit-lens (e.g. "
+                         "'google/gemma-2-2b'). Defaults to a sensible "
+                         "guess from --model-short.")
     ap.add_argument("--n-labels", type=int, default=15)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--label-mode", choices=["click"], default="click",
                     help="click: every partition is a clickable marker; "
                          "click toggles its top-prompt snippet as a label.")
     args = ap.parse_args()
-    from scripts.build_partitions import load_dictionary
-    dictionary = load_dictionary(args.output_dir, args.model_short, args.layer)
+
+    if args.from_hub_percentile is not None:
+        import ep
+        dictionary = ep.Dictionary.from_hub(
+            args.model_short, layer=args.layer,
+            percentile=args.from_hub_percentile,
+        )
+    else:
+        if args.output_dir is None:
+            ap.error("Pass --output-dir or --from-hub-percentile.")
+        from scripts.build_partitions import load_dictionary
+        dictionary = load_dictionary(
+            args.output_dir, args.model_short, args.layer,
+        )
+
+    labels: list[str] | None = None
+    if args.logit_lens:
+        model_id = args.model_name or f"google/{args.model_short}"
+        print(f"loading {model_id} for logit-lens labels…")
+        from transformer_lens import HookedTransformer
+        import torch
+        device = "cuda" if torch.cuda.is_available() else (
+            "mps" if torch.backends.mps.is_available() else "cpu"
+        )
+        model = HookedTransformer.from_pretrained(model_id, device=device)
+        print(f"computing logit-lens labels (k={args.logit_lens_k})…")
+        labels = compute_logit_lens_labels(
+            dictionary, model, k=args.logit_lens_k,
+            use_mean=args.logit_lens_mean,
+        )
+
     render(dictionary, args.out, n_labels=args.n_labels, seed=args.seed,
-           label_mode=args.label_mode, png=args.png,
+           label_mode=args.label_mode, labels=labels, png=args.png,
            image_width=args.width, image_height=args.height,
-           image_scale=args.scale)
+           image_scale=args.scale,
+           label_pct=args.label_pct, label_seed=args.label_seed,
+           label_font_size=args.label_font_size)
 
 
 if __name__ == "__main__":

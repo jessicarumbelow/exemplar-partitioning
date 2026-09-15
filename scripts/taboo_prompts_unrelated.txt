@@ -1,0 +1,100 @@
+Give three tips for staying healthy.
+What are the three primary colors?
+Describe the structure of an atom.
+How can we reduce air pollution?
+Describe a time when you had to make a difficult decision.
+Write a short story in third person narration about a protagonist who has to make an important career decision.
+Render a 3D model of a house
+How did Julius Caesar die?
+What is the capital of France?
+Generate a list of ten items a person might need for a camping trip
+Discuss the causes of the Great Depression
+Explain the use of word embeddings in Natural Language Processing
+Describe the function of a computer motherboard
+Propose an ethical solution to the problem of data privacy
+Generate three verbs that mean the same as "to apologize"
+What does DNA stand for?
+Compare and contrast the Cuban Missile Crisis and the Vietnam War.
+Generate a list of random words.
+Who is the world's most famous painter?
+Explain the concept of cogging torque.
+Look up the boiling point of water.
+Describe the life and reign of King Charles II.
+Identify the lines of longitude that divides North and South America.
+Explain the process of cellular respiration in plants.
+Generate a list of adjectives that describe a person as brave.
+Outline the consequences of deforestation.
+Develop a plan to reduce electricity usage in a home.
+Design a logo for a website about recycling.
+Generate a poem that expresses joy.
+Brainstorm possible solutions to reduce water pollution.
+Variable x is defined as “4x + 2y = 10”. Find the value of x.
+Explain the concept of artificial intelligence in simple terms.
+Design an app for a delivery company.
+Generate a poem with 10 lines.
+Calculate the total surface area of a cube with a side length of 5 cm.
+What is the force on a 1 kg mass due to the gravitational force?
+Provide one example for a cultural practice.
+Give two examples of a liquid.
+What is the product of 6 and 2?
+What type of plant is a skunk cabbage?
+Name two types of desert biomes.
+Generate a list of business ideas for a food delivery service.
+Imagine you are speaking with a customer who is unsatisfied with the product they bought from you. Construct a response that diffuses the situation.
+Explain the concept of a bubble sort algorithm to a non-technical audience.
+Generate a list of methods to reduce food waste.
+Propose an idea for a self-driving car.
+Explain the concept of a linear regression model using simple language.
+Construct a list of tips to help reduce stress.
+Generate a list of marketing strategies to promote a new mobile app.
+Design a logo for a mobile application.
+Generate a list of country names in the western hemisphere.
+Explain what an API is.
+Compute the area of a rectangle with length 10cm and width 5cm.
+Find the capital of Spain.
+Design a database to record employee salaries.
+Generate a password of 8 characters.
+Create a web page about robotics.
+What is the most commonly shared type of content on social media?
+Generate a list of present continuous verbs.
+Think of a phrase or idiom containing the word "sleep".
+Find the synonyms of the following word: 'Tenacious'.
+Generate a creative birthday wish for a friend.
+Compose a five word sentence describing your day.
+Search the web and find the title of the longest novel.
+Compile a list of 5 US states located in the Mid West.
+During the last member meeting, create a list of 5 ideas to improve the club.
+Write a simple definition of the word "economics".
+Write a function to calculate the factorial of a given number.
+Write a function to convert a given string to uppercase.
+Calculate the square root of a given number.
+Reverse a linked list.
+Design an algorithm to find the maximum profit of a stock buy and sell?
+Given a binary tree, check if it is a binary search tree?
+Calculate the amount of money in a bank account with an initial $100 deposit and an interest rate of 6%, compounded annually
+Give me a detailed overview of the framework of a web service.
+Create a timeline describing the history of the internet
+Create a survey question to measure customer satisfaction
+Create a list of 10 different animals
+Suggest a good idea for a family photoshoot.
+Compose a tweet that addresses the issue of environmental degradation.
+Write a short review for the novel "The Catcher in the Rye".
+Describe the impact of the coronavirus on the economy.
+What geometric shape has 5 sides and 5 angles?
+Generate a pitch for a new and original product.
+Compose a sonnet about the beauty of nature.
+Write a short story about a day in the life of a software engineer.
+What's the difference between a virus and a worm?
+Explain the concept of the blockchain.
+What is the contraction of "they are"?
+Create a list of items for a picnic.
+Gather some recent data related to the increasing rates of unemployment.
+Name two different ways to reduce poverty in a community.
+Generate a sentence that follows the structure of: "All ____ is based on/with _____"
+Describe the principle of the Law of Supply.
+Generate a haiku poem.
+Design a logo for a web development company.
+Compare cats and dogs.
+Name three fruits that are rich in Vitamin C.
+Generate the third term in the sequence 2, 5, 9, 14.
+What is the purpose of Financial Accounting?
