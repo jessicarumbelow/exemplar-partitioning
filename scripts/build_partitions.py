@@ -1599,6 +1599,10 @@ def _run_axbench(args, dictionary) -> None:
             "--dump_dir", str(dump_dir),
             "--overwrite_data_dir", str(prod_data_dir),
             "--overwrite_metadata_dir", str(prod_data_dir),
+            # AxBench ships a fixed held-out set next to the training data.
+            # Without this flag inference regenerates the test rows through
+            # the OpenAI API, which is what every run before 2026-09-15 did.
+            "--overwrite_inference_data_dir", str(prod_data_dir.parent / "inference"),
             *extra,
         ]
         logger.info("AxBench: %s %s", module, " ".join(extra))
