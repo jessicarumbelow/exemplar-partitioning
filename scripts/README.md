@@ -18,8 +18,6 @@ The figure-makers all write into `figures/` by default.
 | `compare_sae.py`       | Cross-decomposition F1: per-EP-partition F1 against the best-matching Gemma Scope SAE feature, and vice versa. Used for §6 + app. §B.  |
 | `label_dictionary.py`  | Generate human-readable labels per partition from sample prompts via Anthropic API.                                                   |
 | `match_dictionaries.py`| Bipartite-match partitions across two dictionaries by exemplar similarity. Used for §2.2 + app. §A.4 (cross-seed stability). |
-| `aggregate_reanchor.py`| Reanchor cells under a results root and tabulate `{mean, exemplar, exemplar_reanchored}` × `{p, seed}` for ablation-Δ comparison. |
-| `run_all.py`           | Convenience wrapper: build a sweep of percentiles for one (model, layer), optionally with eval.                                       |
 
 ## Paper experiments
 
@@ -33,7 +31,6 @@ These produce the JSON / NPZ inputs that the figure-makers below consume.
 | `exp_seed_stability.py`           | §2.2 + app. §A.4             | Test whether mean partition directions are stable across random seeds.                                                       |
 | `exp_per_region_stability.py`     | §2.2 + app. §A.4             | Per-region (not aggregate) stability across builds.                                                                          |
 | `exp_stability_predictor.py`      | §2.2 + app. §A.4             | Whether $D_i = \log_{10}(N_i c_i^2)$ predicts cross-seed region stability.                                                   |
-| `exp_behavioral.py`               | §4 + app. §E.1               | Refusal collapse. Build EP on AdvBench + Alpaca at L20 of `gemma-2-2b-it`, score partitions by member refusal rate, ablate the top one. |
 | `exp_refusal_direction.py`        | §4 + app. §E                  | Extract, score, and intervene on the harmful-minus-benign direction across Gemma and Llama layers. Requires a locally built prompt corpus. |
 | `build_refusal_directions.py`     | §4 + app. §E                  | Build EP, prompt-mean, and shuffled-control refusal directions from local activations, assignment caches, and a user-supplied prompt JSON. |
 | `exp_taboo.py`                    | §5 + app. §G                  | Generate Taboo hint transcripts and build fine-tuned/base dictionaries. |
@@ -45,46 +42,21 @@ These produce the JSON / NPZ inputs that the figure-makers below consume.
 | `build_crossfamily_cache.py`      | §4 + app. §E                  | Build the per-layer assignment cache from a saved `(prompts, layers, hidden_dim)` activation array, with no hard-coded scratch paths. |
 | `verify_crossfamily.py`           | §4 + app. §E                  | Recompute the 100%-harmful round-trip grid from the four assignment caches without model inference. |
 
-## Exploratory experiments (not in the published paper)
-
-These ran but didn't make the final paper, or only appear as future-work directions in appendix §I. Kept in-tree because they're useful starting points for follow-up work.
-
-| Script                            | Status                                                                                                          |
-|-----------------------------------|-----------------------------------------------------------------------------------------------------------------|
-| `exp_trajectories.py`             | Cross-layer Sankey. Future-work direction in appendix §I; no figure in main paper.                             |
-| `exp_trajectories_analysis.py`    | Post-process for the above.                                                                                     |
-| `exp_alignment.py`                | Geometric--behavioural alignment. Future-work direction in appendix §I.                                        |
-| `exp_partition_steering.py`       | Steer the model along a single partition's exemplar direction. Not in paper.                                    |
-| `exp_concept_steering.py`         | Steering along supervised concept-difference directions, head-to-head with EP. Not in paper.                    |
-| `exp_patching.py`                 | Activation patching across prompt pairs that share structure but differ in one feature. Not in paper.           |
-| `exp_category_firing.py`          | Do prompts in the same category land in geometrically-close partitions? Not in paper.                           |
-| `aggregate_reanchor.py`           | Reanchor-cell ablation-Δ comparison. Not in paper.                                                              |
-
 ## Figures
 
-Each `make_fig_*` reads JSON / NPZ produced by an `exp_*` (or a dictionary directly) and writes one figure. Marked **(exploratory)** if the corresponding experiment isn't in the published paper.
+Each `make_fig_*` reads JSON / NPZ produced by an `exp_*` (or a dictionary directly) and writes one figure.
 
 | Figure script                          | Reads from                            | Paper section / topic                                              |
 |----------------------------------------|---------------------------------------|--------------------------------------------------------------------|
 | `make_fig_saturation.py`               | `exp_saturation.py`                   | §6 + app. §A.1: saturation curves                                  |
-| `make_fig_resolution_paths.py`         | `exp_resolution_paths.py`             | app. §A.3: path through finer resolutions                          |
-| `make_fig_resolution_voronoi.py`       | `exp_resolution_paths.py`             | app. §A.3: 2D Voronoi panels of the same path                      |
-| `make_fig_coverage.py`                 | `exp_coverage.py`                     | §6 + app. §C: OOD coverage                                         |
 | `make_fig_compare_sae.py`              | `compare_sae.py`                      | §6 + app. §B: EP↔SAE F1 match                                      |
-| `make_fig_refusal.py`                  | `exp_behavioral.py`                   | §4 + app. §E.1: refusal-collapse Δ per percentile                  |
 | `make_fig_neighbourhood.py`            | a dictionary                          | app. §A.2: top-k cosine neighbours + logit-lens labels per anchor  |
 | `make_fig_shared_neighbours.py`        | a dictionary                          | app. §A.3: ASCII tree of cells appearing in top-K of two anchors   |
 | `make_fig_lens_voronoi_tikz.py`        | a dictionary                          | app. §A.3: TikZ source for paper-quality lens-Voronoi panels       |
-| `make_fig_shared_lens.py`              | a dictionary                          | app. §A.3: shared-lens projection across resolutions               |
 | `make_fig_shared_lens_tikz.py`         | a dictionary                          | app. §A.3: TikZ source for the same                                |
-| `make_fig_centering.py`                | (self-contained)                      | Toy showing centred vs uncentred unit-norm geometry                |
-| `make_fig_trajectories.py`             | `exp_trajectories.py`                 | **(exploratory)** cross-layer alluvial; not in paper               |
-| `make_fig_partition_steering.py`       | `exp_partition_steering.py`           | **(exploratory)** steering response curves; not in paper           |
 
 ## Diagnostics and utilities
 
 | Script                            | What it does                                                                                       |
 |-----------------------------------|----------------------------------------------------------------------------------------------------|
-| `check_centering_semantics.py`    | Sanity check: do `(x - center) / ||x - center||` and `x / ||x||` give the same cosine geometry? (No — that's the point.) |
 | `sphere_voronoi.py`               | Standalone 3D-PCA spherical Voronoi plotter with logit-lens labels. Used for the splash figure.    |
-| `mib_fast_test.py`                | MCQA on Gemma-2-2b at one layer with DBM+EP plus full-vector baselines.                            |

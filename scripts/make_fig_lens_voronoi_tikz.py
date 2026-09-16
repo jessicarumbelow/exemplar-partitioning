@@ -140,8 +140,7 @@ def _layout_points(n_lens: int, anchor_x: float = 4.0, lens_y_span: float = 3.0)
     return np.array(points)
 
 
-def _emit_panel(panel: dict, y_offset: float, panel_height: float,
-                display_cap: int) -> str:
+def _emit_panel(panel: dict, y_offset: float, display_cap: int) -> str:
     """Emit TikZ for one panel."""
     out: list[str] = []
 
@@ -270,7 +269,7 @@ def main() -> None:
     PANEL_H = 4.6
     y = 0.0
     for panel in panels:
-        parts.append(_emit_panel(panel, y, PANEL_H, args.display_cap))
+        parts.append(_emit_panel(panel, y, args.display_cap))
         y -= PANEL_H
 
     parts.append("\\end{tikzpicture}")

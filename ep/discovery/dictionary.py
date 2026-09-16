@@ -24,7 +24,6 @@ loose cell.
 
 from __future__ import annotations
 
-import heapq
 import logging
 import pickle
 from dataclasses import dataclass, field
@@ -116,11 +115,6 @@ class Dictionary:
             An activation joins an existing partition if the nearest
             exemplar direction is within this distance; otherwise it spawns
             a new partition.
-        merge_close: if True, run a post-batch pass that merges any pair of
-            partitions whose exemplar directions are within ``threshold``.
-            The larger partition keeps its first-arrival exemplar; the
-            smaller is dissolved into it (demotion strategy). Off by
-            default; canonical EP keeps the full leader-clustering set.
 
     The ``exemplar_direction`` of each partition is the unit-direction form
     of its first-arrival activation, immutable for the life of the cell.
@@ -130,8 +124,6 @@ class Dictionary:
         self,
         center: np.ndarray,
         threshold: float,
-        *,
-        merge_close: bool = False,
     ):
         if center.ndim != 1:
             raise ValueError(f"center must be 1-D, got shape {center.shape}")
@@ -139,19 +131,18 @@ class Dictionary:
             raise ValueError(f"threshold must be positive, got {threshold}")
         self.center = center.astype(np.float32, copy=True)
         self.threshold = float(threshold)
-        self.merge_close = merge_close
         self.partitions: list[Partition] = []
         self._last_batch_new_partition_rate = 0.0
 
         # Incremental exemplar-direction cache: contiguous (capacity, D) buffer,
         # appended on _create_partition. Avoids re-stacking K exemplars on every
-        # add_batch call. Rebuilt only when partitions are mutated by merge.
+        # add_batch call. Rebuilt only when partitions are dropped at finalize.
         self._exemplars: np.ndarray | None = None
         self._exemplars_capacity = 0
 
         # Optional GPU mirror of the exemplar buffer. When CUDA is available
         # the per-batch nearest-exemplar matmul runs on device; the numpy
-        # buffer remains the canonical store (used by merge, distances,
+        # buffer remains the canonical store (used by distances,
         # serialization). Mirror is kept in sync on append/rebuild.
         self._torch, self._torch_device = try_torch_gpu()
         self._use_torch = self._torch is not None
@@ -243,7 +234,7 @@ class Dictionary:
         self._exemplars_t_capacity = new_capacity
 
     def _rebuild_exemplar_cache(self) -> None:
-        """Rebuild the contiguous cache from current partitions (used after merge)."""
+        """Rebuild the contiguous cache from current partitions."""
         n = len(self.partitions)
         if n == 0:
             self._exemplars = None
@@ -431,8 +422,6 @@ class Dictionary:
                             assignments[int(a)] = [pid]
 
         self._reservoir_sample_members(assignments, directions)
-        if self.merge_close:
-            self._merge_close_pairs()
         self._last_batch_new_partition_rate = n_new / n
         self._last_directions = directions
         self._last_dists = per_act_dists
@@ -520,129 +509,6 @@ class Dictionary:
                     p.sample_members.append(directions[idx].copy())
                 elif rolls[idx] < cap / max(p.member_count, 1):
                     p.sample_members[int(slots[idx])] = directions[idx].copy()
-
-    # ----------------------------------------------------------- merge
-
-    def _close_exemplar_pairs(self, n: int) -> tuple[np.ndarray, np.ndarray]:
-        """Upper-triangle pairs (i, j) with cosine distance <= threshold.
-
-        Runs the K×K matmul on GPU when CUDA is available and only the
-        matching pair indices cross back to host — avoids the K×K dist
-        matrix (1.6 GB at K=20k) on CPU.
-        """
-        sim_threshold = 1.0 - self.threshold
-        if self._use_torch:
-            torch = self._torch
-            E_t = self._exemplars_t[:n]
-            sim = E_t @ E_t.T
-            sim.clamp_(-1.0, 1.0)
-            mask = torch.triu(sim >= sim_threshold, diagonal=1)
-            pairs = mask.nonzero(as_tuple=False)
-            if pairs.numel() == 0:
-                return np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64)
-            pairs_cpu = pairs.cpu().numpy()
-            return pairs_cpu[:, 0], pairs_cpu[:, 1]
-
-        E = self._exemplar_direction_matrix()
-        sim = E @ E.T
-        np.clip(sim, -1.0, 1.0, out=sim)
-        iu, ju = np.triu_indices(n, k=1)
-        close = sim[iu, ju] >= sim_threshold
-        return iu[close], ju[close]
-
-    def _merge_close_pairs(self) -> int:
-        """Merge any pair of partitions whose exemplar directions are within θ.
-
-        Demotion strategy: the larger partition keeps its first-arrival
-        exemplar; the smaller is dissolved into it. Returns the number of
-        merge operations performed.
-        """
-        n = len(self.partitions)
-        if n < 2:
-            return 0
-
-        iu, ju = self._close_exemplar_pairs(n)
-        if iu.size == 0:
-            return 0
-
-        parent = list(range(n))
-
-        def find(x):
-            while parent[x] != x:
-                parent[x] = parent[parent[x]]
-                x = parent[x]
-            return x
-
-        for i, j in zip(iu, ju):
-            ri, rj = find(int(i)), find(int(j))
-            if ri != rj:
-                parent[rj] = ri
-
-        groups: dict[int, list[int]] = {}
-        for i in range(n):
-            groups.setdefault(find(i), []).append(i)
-
-        new_partitions: list[Partition] = []
-        n_merges = 0
-        for members in groups.values():
-            if len(members) == 1:
-                new_partitions.append(self.partitions[members[0]])
-                continue
-            members.sort(key=lambda i: -self.partitions[i].member_count)
-            target = self.partitions[members[0]]
-            for source_idx in members[1:]:
-                self._merge_into_target(target, self.partitions[source_idx])
-                n_merges += 1
-            new_partitions.append(target)
-
-        if n_merges:
-            self.partitions = new_partitions
-            self._rebuild_exemplar_cache()
-            logger.info("merge_close: merged %d pair(s) → %d partitions remain",
-                        n_merges, len(self.partitions))
-        return n_merges
-
-    def _merge_into_target(self, target: Partition, source: Partition) -> None:
-        n_a, n_b = target.member_count, source.member_count
-        n_total = n_a + n_b
-
-        # Demotion: target.exemplar_direction (first-arrival) is preserved.
-        # mean_member_direction: combine the two (renormalised) directional means.
-        # Both target and source store unit-mean directions with separate coherences;
-        # reconstruct the underlying sums to combine properly.
-        target_sum = target.member_coherence * n_a * target.mean_member_direction
-        source_sum = source.member_coherence * n_b * source.mean_member_direction
-        combined_sum = (target_sum + source_sum) / n_total
-        coherence = float(np.linalg.norm(combined_sum))
-        target.mean_member_direction = (combined_sum / (coherence + EPS)).astype(
-            target.mean_member_direction.dtype, copy=False,
-        )
-        target.member_coherence = coherence
-        target.member_count = n_total
-        target.sum_dist_to_exemplar += source.sum_dist_to_exemplar
-        target.sum_sq_dist_to_exemplar += source.sum_sq_dist_to_exemplar
-        target.source_iterations |= source.source_iterations
-        target.constituent_sample_indices.extend(source.constituent_sample_indices)
-
-        # sample_prompts stores (-dist, prompt, pos); keep the K with largest
-        # x[0] (= largest -dist = smallest dist = closest to exemplar).
-        combined_sp = target.sample_prompts + source.sample_prompts
-        combined_sp.sort(key=lambda x: x[0], reverse=True)
-        target.sample_prompts = combined_sp[:MAX_PROMPT_EXAMPLES]
-        heapq.heapify(target.sample_prompts)
-
-        combined_bp = target.boundary_prompts + source.boundary_prompts
-        combined_bp.sort(key=lambda x: x[0], reverse=True)
-        target.boundary_prompts = combined_bp[:MAX_PROMPT_EXAMPLES]
-        heapq.heapify(target.boundary_prompts)
-
-        combined_m = target.sample_members + source.sample_members
-        if len(combined_m) <= SAMPLE_RESERVOIR_CAP:
-            target.sample_members = combined_m
-        else:
-            rng = np.random.default_rng()
-            keep = rng.choice(len(combined_m), size=SAMPLE_RESERVOIR_CAP, replace=False)
-            target.sample_members = [combined_m[i] for i in keep]
 
     # --------------------------------------------------------- finalization
 

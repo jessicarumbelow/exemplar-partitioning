@@ -105,22 +105,18 @@ def format_number(value: float | int | None) -> str:
 def config_slug(args: argparse.Namespace) -> str:
     threshold = f"p{format_number(args.percentile)}"
     prompt_cap = f"_mp{args.max_prompts}" if args.max_prompts is not None else ""
-    flags = ""
-    if args.merge_close:
-        flags += "_merge"
     return (
         f"{args.model_short}_L{args.layer}_{threshold}"
         f"_ctx{args.context_length}_mt{args.max_tokens}{prompt_cap}_bs{args.model_batch_size}"
-        f"_seed{args.seed}_{args.extractor}_{args.sampling_mode}{flags}"
+        f"_seed{args.seed}_{args.extractor}_{args.sampling_mode}"
     )
 
 
 def activations_slug(args: argparse.Namespace) -> str:
     """Slug for the raw-activation shard cache.
 
-    Drops percentile and merge_close — neither affects the activations that
-    discover() sees, so percentile sweeps and merge-variant runs at the same
-    seed/model/layer share one cache.
+    Drops percentile — it does not affect the activations that discover()
+    sees, so percentile sweeps at the same seed/model/layer share one cache.
     """
     prompt_cap = f"_mp{args.max_prompts}" if args.max_prompts is not None else ""
     hook_part = ""
@@ -241,7 +237,6 @@ def discovery_config(args: argparse.Namespace) -> dict:
         "calibration_tokens": args.calibration_tokens,
         "seed": args.seed,
         "extractor": args.extractor,
-        "merge_close": args.merge_close,
     }
 
 
@@ -903,7 +898,6 @@ def build_dictionary(
     seed: int = 0,
     device: str = "cpu",
     use_wandb: bool = False,
-    merge_close: bool = False,
     activations_cache_dir: Path | None = None,
     log_attribution: bool = True,
     attribution_prompts_per_partition: int = 5,
@@ -969,7 +963,6 @@ def build_dictionary(
         checkpoint_fn=checkpoint_fn,
         log_fn=log_fn,
         seed=seed,
-        merge_close=merge_close,
         activations_cache_dir=activations_cache_dir,
     )
 
@@ -2115,9 +2108,6 @@ def main() -> None:
                         help="Rebuild even if a compatible cached dictionary exists.")
     parser.add_argument("--extractor", choices=("per-position", "final-position"),
                         default="per-position")
-    parser.add_argument("--merge-close", action="store_true",
-                        help="After each batch, merge partition pairs whose exemplar "
-                             "directions lie within θ (demotion strategy).")
     parser.add_argument("--wandb", action="store_true", help="Enable wandb logging.")
     parser.add_argument("--wandb-project", type=str, default="ep")
     parser.add_argument("--wandb-entity", type=str, default=None,
@@ -2292,7 +2282,6 @@ def main() -> None:
             seed=args.seed,
             device=args.device,
             use_wandb=args.wandb,
-            merge_close=args.merge_close,
             activations_cache_dir=activations_cache_dir_for(args),
             log_attribution=not args.no_attribution,
             attribution_prompts_per_partition=args.attribution_prompts,

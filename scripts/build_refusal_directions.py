@@ -41,7 +41,7 @@ def shuffled_exemplars(acts, ids, keep, rng):
 
 
 def build_checkpoint(acts, ids_all, dists_all, is_harmful, held,
-                     held_h, held_b, canonical_layer, rng):
+                     held_h, held_b, rng):
     n_layers, width = acts.shape[1:]
     allowed_h = np.array([i for i in np.flatnonzero(is_harmful) if i not in held])
     allowed_b = np.array([i for i in np.flatnonzero(~is_harmful) if i not in held])

@@ -174,7 +174,6 @@ def discover(
     checkpoint_fn: Callable | None = None,
     log_fn: Callable[[dict], None] | None = None,
     seed: int = 0,
-    merge_close: bool = False,
     activations_cache_dir: Path | None = None,
 ) -> DiscoveryResult:
     """Run streaming exemplar-partition discovery against a fixed calibration.
@@ -200,10 +199,6 @@ def discover(
             (dictionary, snapshots, stats_dict).
         log_fn: called every log_cadence batches with a flat metric dict.
         seed: random seed for prompt ordering.
-        merge_close: if True, run a post-batch merge pass that demotes
-            any partition whose exemplar falls within θ of a larger
-            partition's exemplar. Off by default; canonical EP keeps the
-            full leader-clustering partition set.
         activations_cache_dir: if set, write each batch's raw activations
             (plus prompt/position metadata) as a sharded `.npz`.
     """
@@ -223,7 +218,6 @@ def discover(
     dictionary = Dictionary(
         center=calibration.center,
         threshold=calibration.threshold,
-        merge_close=merge_close,
     )
 
     activations_cache_dir = (

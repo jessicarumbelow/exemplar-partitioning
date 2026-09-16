@@ -218,7 +218,7 @@ def ablate(act, hook):
     return (x - proj).to(act.dtype) + c.to(act)
 ```
 
-The paper's region-ablation result (§4 "Causal support" paragraph, full sweep in appendix §E.1) uses exactly this ablation pattern on the partition whose exemplar matches the refusal direction in Gemma-2-2B-it L20. To reproduce end-to-end — build the dictionary, score partitions by member refusal rate, ablate the top one on a held-out harmful set — run [`scripts/exp_behavioral.py`](scripts/exp_behavioral.py); the per-percentile plotting (`make_fig_refusal.py`) consumes its JSON outputs.
+The paper's region-ablation result (§4 "Causal support" paragraph, layer sweep in appendix §E.1) uses this ablation pattern on the wholly harmful regions of Gemma-2-2B-it and Llama-3.1-8B-Instruct. [`scripts/exp_refusal_direction.py`](scripts/exp_refusal_direction.py) reproduces it given a locally built harmful/benign prompt corpus.
 
 ## Repository layout
 
@@ -233,7 +233,6 @@ ep/                       # The package
 │   └── geometry.py          # Centred unit-norm primitives + GPU detection
 ├── saebench_adapter.py      # SAEBench-compatible EPDictionarySAE wrapper
 ├── saebench_sota.py         # Cached SAEBench leaderboard numbers for headline tables
-├── mib_adapter.py           # Featurizer / inverse-featurizer for MIB causal-variable track
 └── utils.py                 # set_seed
 
 scripts/                  # Build, evaluate, and reproduce the paper figures
