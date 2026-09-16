@@ -20,6 +20,7 @@ All notable changes to this project will be documented here. The project follows
 - `saebench_adapter` module docstring lists all six readouts (`topk`, `signed`, `cosine`, `signed_norm`, `topk_norm`, `binary`), not just three.
 
 ### Removed
+- Unsupported out-of-distribution detection claims from the README, walkthrough, and experiment descriptions. Coverage scripts remain available as exploratory diagnostics.
 - `Run on Modal:` recipes from every `scripts/exp_*.py` docstring. The referenced Modal driver lives outside the public repo, so the recipes were dead ends for fresh researchers. Local invocation is the only documented path now.
 - Hardcoded personal wandb entity from `build_partitions.py`, `compare_sae.py`, and all `exp_*.py` scripts.
 - Internal Modal-volume comments from `build_partitions.py` and `_axbench_evaluate.py` docstrings (replaced with filesystem-agnostic wording).
@@ -40,7 +41,7 @@ All notable changes to this project will be documented here. The project follows
 - `scripts/repickle_hub.py`, `scripts/patch_hub_metadata.py` — one-shot migration scripts kept in-tree for provenance.
 - README intervention example now includes `alpha`-scale guidance.
 - CLI section reorganised by research goal (build / AxBench / SAEBench / resume).
-- `notebooks/walkthrough.ipynb` — CPU-runnable tour of `from_hub`, partition inspection, OOD distance, and the intervention pattern.
+- `notebooks/walkthrough.ipynb` — CPU-runnable tour of `from_hub`, partition inspection, nearest-exemplar distance, and the intervention pattern.
 - `scripts/README.md` — script-to-figure and script-to-paper-section map.
 - This file.
 

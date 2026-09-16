@@ -29,7 +29,7 @@ These produce the JSON / NPZ inputs that the figure-makers below consume.
 |-----------------------------------|------------------------------|------------------------------------------------------------------------------------------------------------------------------|
 | `exp_saturation.py`               | §8 + app. §A.1               | Online partition growth on math / code / chat streams — does dictionary size saturate?                                       |
 | `exp_resolution_paths.py`         | §3 + app. §A.5               | Pick two partitions in a coarse dictionary; trace the shortest path between them in finer-resolution dictionaries.           |
-| `exp_coverage.py`                 | §7 + app. §C                 | Per (dictionary, corpus): within-threshold rate and mean nearest-exemplar distance — OOD geometry.                           |
+| `exp_coverage.py`                 | Exploratory; not in revised paper | Per (dictionary, corpus): within-threshold rate and mean nearest-exemplar distance.                           |
 | `exp_seed_stability.py`           | §2.2 + app. §A.7             | Test whether mean partition directions are stable across random seeds.                                                       |
 | `exp_per_region_stability.py`     | §2.2 + app. §A.7             | Per-region (not aggregate) stability across builds.                                                                          |
 | `exp_stability_predictor.py`      | §2.2 + app. §A.7             | Whether $D_i = \log_{10}(N_i c_i^2)$ predicts cross-seed region stability.                                                   |
@@ -69,7 +69,7 @@ Each `make_fig_*` reads JSON / NPZ produced by an `exp_*` (or a dictionary direc
 | `make_fig_saturation.py`               | `exp_saturation.py`                   | §8 + app. §A.1: saturation curves                                  |
 | `make_fig_resolution_paths.py`         | `exp_resolution_paths.py`             | §3 + app. §A.5: path through finer resolutions                     |
 | `make_fig_resolution_voronoi.py`       | `exp_resolution_paths.py`             | §3 + app. §A.5: 2D Voronoi panels of the same path                 |
-| `make_fig_coverage.py`                 | `exp_coverage.py`                     | §7 + app. §C: OOD coverage                                         |
+| `make_fig_coverage.py`                 | `exp_coverage.py`                     | **(exploratory)** geometric coverage; not in revised paper                                         |
 | `make_fig_compare_sae.py`              | `compare_sae.py`                      | §6 + app. §B: EP↔SAE F1 match                                      |
 | `make_fig_refusal.py`                  | `exp_behavioral.py`                   | §4.1 + app. §A.2: refusal-collapse Δ per percentile                |
 | `make_fig_neighbourhood.py`            | a dictionary                          | §3: top-k cosine neighbours + logit-lens labels per anchor         |
