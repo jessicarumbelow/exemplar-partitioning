@@ -31,11 +31,11 @@ These produce the JSON / NPZ inputs that the figure-makers below consume.
 | `exp_seed_stability.py`           | §2.2 + app. §A.4             | Test whether mean partition directions are stable across random seeds.                                                       |
 | `exp_per_region_stability.py`     | §2.2 + app. §A.4             | Per-region (not aggregate) stability across builds.                                                                          |
 | `exp_stability_predictor.py`      | §2.2 + app. §A.4             | Whether $D_i = \log_{10}(N_i c_i^2)$ predicts cross-seed region stability.                                                   |
-| `exp_refusal_direction.py`        | §4 + app. §E                  | Extract, score, and intervene on the harmful-minus-benign direction across Gemma and Llama layers. Requires a locally built prompt corpus. |
-| `build_refusal_directions.py`     | §4 + app. §E                  | Build EP, prompt-mean, and shuffled-control refusal directions from local activations, assignment caches, and a user-supplied prompt JSON. |
+| `prepare_region_ablation.py`      | §4 + app. §E                  | Recreate the paper's held-out prompt split from a user-supplied harmful/benign prompt JSON. |
+| `exp_region_ablation.py`          | §4 + app. §E                  | Test the centroid-span swap, controls, and layer sweep from the causal intervention section. Requires local prompt and activation data. |
 | `exp_taboo.py`                    | §5 + app. §G                  | Generate Taboo hint transcripts and build fine-tuned/base dictionaries. |
-| `exp_taboo_occupancy.py`          | §5 + app. §G                  | Rank Taboo regions by fine-tuned-minus-base occupancy and compute vocabulary readouts. |
 | `exp_taboo_control.py`            | §5 + app. §G                  | Extract the two fixed assistant-prefix activations used by the 21-organism result. |
+| `exp_taboo_inventory.py`          | §5 + app. §G                  | List all regions with fine-tuned support and zero base support; optionally score secret ranks after construction. |
 | `exp_taboo_audit.py`              | §5 + app. §G                  | Compare transcript-only and transcript-plus-region secret auditors. |
 | `exp_resolution_separation.py`    | §6 + app. §H                  | Run the ordered-colour toy and report when coarse identities split into ordered pairs. |
 | `verify_text_baseline.py`         | §4 + app. §E                  | TF--IDF $k$-means control for harmful/benign separation. Accepts a locally constructed prompt JSON; the harmful corpus is not distributed. |

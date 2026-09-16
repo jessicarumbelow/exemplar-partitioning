@@ -646,6 +646,7 @@ all = [
     { name = "plotly" },
     { name = "pyyaml" },
     { name = "sae-lens" },
+    { name = "safetensors" },
     { name = "scikit-learn" },
     { name = "wandb" },
 ]
@@ -660,6 +661,7 @@ scripts = [
     { name = "matplotlib" },
     { name = "plotly" },
     { name = "pyyaml" },
+    { name = "safetensors" },
     { name = "scikit-learn" },
     { name = "wandb" },
 ]
@@ -676,6 +678,7 @@ requires-dist = [
     { name = "plotly", marker = "extra == 'scripts'", specifier = ">=5.20" },
     { name = "pyyaml", marker = "extra == 'scripts'", specifier = ">=6.0" },
     { name = "sae-lens", marker = "extra == 'sae'", specifier = ">=0.5" },
+    { name = "safetensors", marker = "extra == 'scripts'", specifier = ">=0.4" },
     { name = "scikit-learn", marker = "extra == 'sae'", specifier = ">=1.4" },
     { name = "scikit-learn", marker = "extra == 'scripts'", specifier = ">=1.4" },
     { name = "scipy", specifier = ">=1.12" },

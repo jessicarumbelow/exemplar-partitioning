@@ -19,6 +19,7 @@ images/
 results/*
 !results/summaries/
 outputs/
+data/
 wandb/
 *.pkl
 *.npz

@@ -17,3 +17,13 @@ def test_grid_counts_prompt_identity_round_trips():
     result = module.grid((ids, exemplars, fractions),
                          (ids, exemplars, fractions))
     assert result[0, 0] == 1.0
+
+
+def test_permutation_null_re_pairs_shared_prompts():
+    anchor = (np.array([[0, 0, 1, 1]]), [{0: 0, 1: 2}], [{0: 1.0, 1: 1.0}])
+    target = (np.array([[0, 0, 1, 1]]), [{0: 0, 1: 2}], [{0: 1.0, 1: 1.0}])
+    identity = np.arange(4)
+    swapped = np.array([2, 3, 0, 1])
+
+    assert module.round_trip_count(anchor, target, 0, 0, identity, identity) == 2
+    assert module.round_trip_count(anchor, target, 0, 0, swapped, identity) == 0

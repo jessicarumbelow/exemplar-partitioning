@@ -26,7 +26,7 @@ image = (
         "transformers==4.45.1", "transformer-lens==2.15.4",
         "datasets==3.6.0", "huggingface-hub==0.36.2",
         "scikit-learn>=1.4", "matplotlib", "tqdm",
-        "zstandard>=0.22", "peft>=0.13",
+        "zstandard>=0.22", "peft>=0.13", "safetensors>=0.4",
     )
     .env({"PYTHONPATH": "/root/research/ep"})
     .add_local_dir("ep", remote_path="/root/research/ep/ep")
@@ -134,20 +134,21 @@ def taboo_control(secrets: str = "gold,chair,smile", layer: int = 32,
         print(secret, handle.get())
 
 
-@app.function(name="ep-taboo-occupancy", timeout=3600, **worker)
-def _taboo_occupancy(run_dir: str, top_regions: int = 15) -> dict:
-    rc = _run("scripts.exp_taboo_occupancy",
-              ["--run-dir", run_dir, "--top-regions", str(top_regions)])
+@app.function(name="ep-taboo-inventory", timeout=3600, **worker)
+def _taboo_inventory(run_dirs: str, output: str,
+                     evaluate_secret: bool = False) -> dict:
+    args = ["--run-dirs", run_dirs, "--output", output]
+    if evaluate_secret:
+        args.append("--evaluate-secret")
+    rc = _run("scripts.exp_taboo_inventory", args)
     results.commit()
-    return {"returncode": rc, "run_dir": run_dir}
+    return {"returncode": rc, "output": output}
 
 
 @app.local_entrypoint()
-def taboo_occupancy(run_dirs: str, top_regions: int = 15):
-    handles = [_taboo_occupancy.spawn(path.strip(), top_regions)
-               for path in run_dirs.split(",") if path.strip()]
-    for handle in handles:
-        print(handle.get())
+def taboo_inventory(run_dirs: str, output: str,
+                    evaluate_secret: bool = False):
+    print(_taboo_inventory.remote(run_dirs, output, evaluate_secret))
 
 
 @app.function(

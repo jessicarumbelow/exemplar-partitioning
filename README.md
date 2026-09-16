@@ -2,11 +2,13 @@
 
 We introduce Exemplar Partitioning (EP), an unsupervised method for constructing interpretable feature dictionaries from Large Language Model (LLM) activations with ~10³× fewer tokens than comparable sparse autoencoders. An EP dictionary is a Voronoi partition of centered, unit-norm activation space, built by leader-clustering streamed activations within a cosine-distance threshold. Each region is anchored by an observed exemplar that serves as both its membership criterion and intervention direction; dictionary size is not prespecified, but determined by the activation geometry at that threshold. Because exemplars are observed rather than learned, dictionaries built from the same data stream are directly comparable across layers, models, and training checkpoints.
 
-This paper characterises EP through targeted demonstrations and one head-to-head benchmark. On AxBench latent concept detection at Gemma-2-2B-it L20, EP at p₁ reaches mean AUROC 0.937 with the region mean as detector under SAE-A's own selection rule on AxBench's shipped held-out set, above SAE-A's 0.911 and +0.182 over the canonical GemmaScope SAE leaderboard entry, at ~10³× less build compute (0.881 with the exemplar under the token-mean contrast rule). Shared prompt exemplars also make independently built dictionaries directly comparable: mean round-trip correspondence between wholly harmful Gemma and Llama regions rises from 19% in the base models to 44% after instruction tuning. Across all 21 Taboo model organisms, one of the two regions with the largest fine-tuned-minus-base occupancy decodes the planted secret among its top four embedding tokens in 13 cases and among its top 20 in 16, without using the secret to select the region. EP regions and Gemma Scope SAE features agree selectively: roughly 20% of EP regions have a strong SAE counterpart at p₁₀. Under the native one-hot readout, EP retains 98% of raw-activation top-1 probe accuracy and 82% of test accuracy at p₁₀; test-accuracy retention rises to 91% at p₁. Nearest-exemplar distance provides an out-of-distribution signal at inference. Code: [github.com/jessicarumbelow/exemplar-partitioning](https://github.com/jessicarumbelow/exemplar-partitioning).
+This paper characterises EP through targeted demonstrations and one head-to-head benchmark. On AxBench latent concept detection at Gemma-2-2B-it L20, EP at p₁ reaches mean AUROC 0.937 with the region mean as detector under SAE-A's own selection rule on AxBench's shipped held-out set, above SAE-A's 0.911 and +0.182 over the canonical GemmaScope SAE leaderboard entry, at ~10³× less build compute (0.881 with the exemplar under the token-mean contrast rule). Shared prompt exemplars also make independently built dictionaries directly comparable: mean round-trip correspondence between wholly harmful Gemma and Llama regions rises from 19% in the base models to 44% after instruction tuning. Across 21 Taboo organisms, inspecting every region with fine-tuned support and zero base support finds a human-readable secret region in 19 cases. The secret is used only to evaluate the list after construction; EP does not automatically select the right region. EP regions and Gemma Scope SAE features agree selectively: roughly 20% of EP regions have a strong SAE counterpart at p₁₀. Under the native one-hot readout, EP retains 98% of raw-activation top-1 probe accuracy and 82% of test accuracy at p₁₀; test-accuracy retention rises to 91% at p₁. Nearest-exemplar distance provides an out-of-distribution signal at inference. Code: [github.com/jessicarumbelow/exemplar-partitioning](https://github.com/jessicarumbelow/exemplar-partitioning).
 
 > **Paper:** ["Exemplar Partitioning for Mechanistic Interpretability"](https://arxiv.org/abs/2605.14347) (arXiv:2605.14347).
 >
 > **Prebuilt dictionaries:** [`J-RUM/exemplar-partitioning`](https://huggingface.co/datasets/J-RUM/exemplar-partitioning) on HuggingFace — Gemma-2-2B (L12 across $p \in \{1, 2, 4, 8, 10\}$, plus L20 at $p=10$) and Gemma-2-2B-it (L4 at $p=4$, L12 at $p=10$, L20 across $p \in \{1, 2, 4, 8, 10\}$). EP has no training step; the dictionaries are streamed partitions over Pile activations, distributed so you can skip the build. Files are Python pickles — verify the blob SHA on the dataset page before loading.
+
+The Gemma-2-2B-it L20 $p=0.5$ build reported in the paper is not in the dataset; reproduce it with `scripts.build_partitions`.
 
 ## Install
 
@@ -147,16 +149,34 @@ Adds: `--eval sparse_probing` and `--readout-override`, `--readout-k`.
 
 See [`scripts/README.md`](scripts/README.md) for the full script-to-figure / script-to-section map.
 
-The Taboo, resolution-toy and cross-family experiments are also available as module entrypoints. The Taboo pipeline is split into generation/build, occupancy scoring, fixed-token extraction, and auditing:
+The Taboo, resolution-toy and cross-family experiments are also available as module entrypoints. The Taboo pipeline generates transcripts, extracts the two assistant control-token activations, then inventories every region with fine-tuned support and zero assigned base support:
 
 ```bash
 python -m scripts.exp_taboo --help
-python -m scripts.exp_taboo_occupancy --help
 python -m scripts.exp_taboo_control --help
+python -m scripts.exp_taboo_inventory --help
 python -m scripts.exp_taboo_audit --help
 ```
 
-Run `python -m scripts.exp_resolution_separation --help` for the ordered-colour resolution toy and `python -m scripts.exp_refusal_direction --help` for the cross-family intervention experiment. Small saved summaries are in [`results/summaries/`](results/summaries/), including the complete 21-organism Taboo table. The harmful-prompt corpus is not distributed; the cross-family verifiers accept locally constructed data and caches.
+The inventory reads `results.json` and `acts_control.npz` from each `exp_taboo_control` run. Its default output lists candidate regions without using the secret. Pass `--evaluate-secret` to add secret embedding ranks for post-hoc evaluation. The saved [21-organism summary](results/summaries/taboo_21_summary.json) records the best post-hoc row for each organism; the [occupancy comparison](results/summaries/taboo_occupancy_comparison.json) records the older selector reported as a control in the paper.
+
+```bash
+python -m scripts.exp_taboo_inventory \
+    --run-dirs outputs/blue_control,outputs/book_control \
+    --output outputs/taboo_inventory.json --evaluate-secret
+```
+
+Run `python -m scripts.exp_resolution_separation --help` for the ordered-colour toy. For the causal intervention, prepare the prompt split with `python -m scripts.prepare_region_ablation --help`, then run `python -m scripts.exp_region_ablation --help` with your activation arrays and assignment cache. At L14, the paper's main intervention is `--conditions swap-c`; `--layers 8-20` reproduces the layer sweep. The harmful-prompt corpus and activation arrays are not distributed. Small saved summaries are in [`results/summaries/`](results/summaries/).
+
+```bash
+python -m scripts.prepare_region_ablation \
+    --prompts-json data/prompts.json --output-dir outputs/region_split
+python -m scripts.exp_region_ablation \
+    --model google/gemma-2-2b-it --tag g_it --layer 14 \
+    --acts data/acts_g_it.npy --cache data/cache_g_it.npz \
+    --split-dir outputs/region_split --output-dir outputs/ablation_g_it_L14 \
+    --conditions swap-c
+```
 
 GPU reproduction for the Taboo and ordered-colour experiments is available through [`modal/experiments.py`](modal/experiments.py). The saved Taboo resolution, layer, and secret-text controls are in [`results/summaries/taboo_robustness.json`](results/summaries/taboo_robustness.json).
 
@@ -218,7 +238,7 @@ def ablate(act, hook):
     return (x - proj).to(act.dtype) + c.to(act)
 ```
 
-The paper's region-ablation result (§4 "Causal support" paragraph, layer sweep in appendix §E.1) uses this ablation pattern on the wholly harmful regions of Gemma-2-2B-it and Llama-3.1-8B-Instruct. [`scripts/exp_refusal_direction.py`](scripts/exp_refusal_direction.py) reproduces it given a locally built harmful/benign prompt corpus.
+The paper's causal result uses a different intervention: it projects off the span of harmful-region **means** and adds the benign regions' mean position within that span. See [`scripts/exp_region_ablation.py`](scripts/exp_region_ablation.py) for that centroid swap and its controls. The single-direction hook above is an illustrative intervention recipe.
 
 ## Repository layout
 

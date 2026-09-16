@@ -1,23 +1,19 @@
-"""Taboo discovery restricted to assistant control tokens (non-circular readout).
+"""Build Taboo dictionaries from assistant control-token activations.
 
-The hint-transcript version of exp_taboo is circular for a discovery claim: the
-secret's content is present as text in the build data, so member snippets carry
-it. Cywinski et al. avoid this by reading activations only at the assistant
-control tokens (<start_of_turn> and model), where the surface text is identical
-scaffolding — any secret information there is activation-borne by construction.
+The surface text at these positions is identical across transcripts. The base
+model reads the same transcripts and provides an assignment control.
 
-This script mirrors that protocol with EP in the SAE slot:
+The script:
   1. Reuse the hint-game transcripts from an exp_taboo run.
   2. Extract per-position activations at --layer (paper uses 32) for the taboo
      and stock models; keep only assistant control positions.
-  3. Build an EP dictionary on the taboo model's control activations, assign
-     the stock model's control activations into it, rank regions by occupancy
-     difference (taboo - stock).
-  4. Read each top region's geometry out as tokens, with no member text in the
-     loop: logit lens on the centred mean direction, plus cosine against the
-     token embedding matrix (the paper's activation-token similarity) for both
-     the centred direction and the raw mean member activation.
-Success = the secret's rank under these readouts, never member snippets.
+  3. Build an EP dictionary on the fine-tuned model's control activations and
+     assign the base model's activations into it.
+  4. Save all assignments and counts. The top occupancy regions are also read
+     out for the paper's pilot comparison and auditor experiment.
+
+``exp_taboo_inventory`` lists every region with fine-tuned support and zero
+base support for the paper's main 21-organism analysis.
 """
 
 from __future__ import annotations

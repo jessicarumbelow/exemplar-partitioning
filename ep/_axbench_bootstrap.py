@@ -10,22 +10,16 @@ on disk stays byte-identical with upstream:
    ``Pipeline`` and skip the cost.
 
 2. Pre-load the ``axbench`` package with a trimmed ``__init__.py``.
-   Upstream's init star-imports several modules — sft, lora, reft,
-   lsreft, steering_vector, ig, random, mean, bow, probe,
-   preference_lora/reft, concept_lora/reft, preference_vector,
-   concept_vector, hypersteer, hypernet, plus winrate/latent_stats
-   evaluators — that we don't use. Some of them break in the wild
-   depending on which transformers/peft minor version is installed,
-   so eagerly loading them just to throw the symbols away is both
-   wasteful and a recurring source of ImportError surprises.
+   Upstream's init also imports optional models and evaluators that this
+   evaluation does not use. Loading only the required modules avoids their
+   additional ``transformers`` and ``peft`` dependencies.
 
 3. Monkey-patch ``LanguageModel.chat_completion`` to retry transient
    OpenAI errors (429/5xx) with exponential backoff and return a
    sentinel ``[OPENAI_SKIP]`` on permanent client errors (400/403/422)
    instead of raising. Upstream propagates exceptions through
-   ``asyncio.gather`` which kills the entire eval on a single bad
-   prompt — one content-policy 403 out of 9742 calls aborted a 6-hour
-   p2 run after 101/500 concepts. Also bumps the default
+   ``asyncio.gather``, so a single permanent client error would stop the
+   evaluation. Also bumps the default
    ``chat_completions`` ``batch_size`` from 32 → 128 for higher
    OpenAI concurrency. Sentinels propagate through the parquet, and
    the downstream mean computation in ``_read_axbench_metrics`` is

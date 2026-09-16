@@ -1,10 +1,8 @@
 """Wrapper that runs AxBench's train.py through ``ep._axbench_bootstrap``.
 
-No source patching here — train.py already respects ``max_concepts`` and
-doesn't touch ``master_data_dir``. The only reason this wrapper exists is
-to install our trimmed ``axbench`` package (which skips broken upstream
-star-imports like ``models.hypernet.modeling_hypernet`` that depend on
-private ``transformers`` utilities) before train.py runs ``import axbench``.
+The wrapper loads only the AxBench modules needed for this evaluation before
+train.py imports ``axbench``. This avoids optional upstream imports with
+additional ``transformers`` dependencies.
 
 Invoked as ``python -m ep._axbench_train`` in place of
 ``python -m axbench.scripts.train``.
