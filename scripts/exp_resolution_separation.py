@@ -1,8 +1,7 @@
-"""Resolution-based separation demo (rebuttal #4 / #5).
+"""Resolution-separation toy (paper §6 and appendix H).
 
-A controlled toy on REAL activations, answering the reviewers' worry that EP
-"cannot recover fine-grained / compositional concepts that never appear in
-isolation" (2Cbw, tJDm).
+A controlled toy on real activations, testing whether EP can recover
+fine-grained or compositional features that never appear in isolation.
 
 Design (colours only)
 ---------------------
@@ -13,8 +12,8 @@ pair of two distinct colours, the backgrounded one bracketed::
 
 We read the final-position activation, which sits on ``c2`` -- the recency-
 prominent colour. ``c1`` is present in context but is NEVER the read token:
-it is the backgrounded, never-isolated feature the reviewers doubt EP can
-recover. Both orders of every pair are present, so:
+it is the backgrounded, never-isolated feature. Both orders of every pair
+are present, so:
 
   (1) Prominence = recency. "blue red" and "red blue" (same colour set,
       opposite order) separate because the prominent (final) colour differs.
@@ -34,8 +33,8 @@ a distance ladder
         <  different-final-colour (prominent colour)
 
 so the backgrounded colour is resolved only while the threshold sits below the
-top rung -- i.e. at small enough p. That is the rebuttal's claim: fine-grained
-recovery is a matter of choosing a small enough p.
+top rung -- i.e. at small enough p. Fine-grained recovery is a matter of
+choosing a small enough p.
 
 The build reproduces discover()'s streaming leader-clustering exactly: discover
 only ever mutates the dictionary via Dictionary.add_batch in a loop over
@@ -51,7 +50,7 @@ Metrics (per p)
     * full condition (c1>c2)          -- high only at small p
 - purity of regions against the full condition label.
 
-Dense readout (§2.1)
+Dense readout (paper §6)
 --------------------
 Per-condition centroids in centred-unit space; their 6x6 pairwise cosine
 distances. Prediction: conditions sharing the final (prominent) colour are
@@ -60,7 +59,7 @@ prominent feature, with the backgrounded feature as a secondary axis.
 
 Run:
     uv run python -m scripts.exp_resolution_separation \
-        --output-root ~/research/ep-neurips/results/resolution_separation
+        --output-root results/resolution_separation
 """
 
 from __future__ import annotations
@@ -125,9 +124,9 @@ def build_dictionary_from_acts(X, center, threshold, batch_size, seed):
     return d
 
 
-def write_reviewer_readout(coarse_d, fine_d, X, full_lbl, prompts,
-                           coarse_p, fine_p, output_root: Path):
-    """Terse two-resolution readout for pasting into the reviewer response.
+def write_readout(coarse_d, fine_d, X, full_lbl, prompts,
+                  coarse_p, fine_p, output_root: Path):
+    """Terse two-resolution readout.
 
     Both blocks have the same shape: each region, a couple of example member
     prompts, and its distances to the other regions. COARSE regions are the
@@ -163,7 +162,7 @@ def write_reviewer_readout(coarse_d, fine_d, X, full_lbl, prompts,
     L += block(fine_d, False, fine_p)
 
     text = "\n".join(L)
-    path = output_root / "reviewer_readout.txt"
+    path = output_root / "readout.txt"
     path.write_text(text)
     logger.info("Wrote %s", path)
     logger.info("\n%s", text)
@@ -293,7 +292,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--output-root", type=Path,
-                    default=Path.home() / "research/ep-neurips/results/resolution_separation")
+                    default=Path("results/resolution_separation"))
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
@@ -429,7 +428,7 @@ def main():
         json.dump(out, f, indent=2)
     logger.info("Wrote %s", json_path)
 
-    # --- Terse two-resolution readout for the reviewer response ---
+    # --- Terse two-resolution readout ---
     # Search p for exactly coarse_k and fine_k regions.
     p_grid = _p_grid(args.p_grid)
     cp, coarse_d, _, c_exact = find_p_for_k(
@@ -453,8 +452,8 @@ def main():
         if pur < 0.9:
             logger.warning("Fine region %d impure (purity %.2f, dominant %s); "
                            "lower --max-int.", r, pur, comp.most_common(1)[0][0])
-    write_reviewer_readout(coarse_d, fine_d, X, full_lbl, prompts,
-                           cp, fp, args.output_root)
+    write_readout(coarse_d, fine_d, X, full_lbl, prompts,
+                  cp, fp, args.output_root)
 
     _make_figure(rows, dense, ordered_conditions, args.output_root)
 

@@ -1,4 +1,4 @@
-"""Pull behavioural.json from the original (Table 2) cells and the matching
+"""Pull behavioural.json from the original cells and the matching
 _reanchor cells, print a per-(p, seed) comparison table of refusal-ablation
 Δ across {mean, exemplar, exemplar_reanchored} bases plus the
 size-and-coherence-matched null.
@@ -102,9 +102,8 @@ def main() -> int:
             _fmt(r["null_reanchored_re"]).rjust(widths[7]),
         ]))
 
-    # W1 verdict per cell
     print()
-    print("W1 verdict (does on-mean re-anchor flip a previously-failing seed?)")
+    print("Does on-mean re-anchor flip a failing seed?")
     flips = 0
     eligible = 0
     for r in rows:
@@ -120,7 +119,7 @@ def main() -> int:
             if d_new <= -0.5:
                 flips += 1
     print()
-    print(f"Total: {flips} of {eligible} previously-failing cells flip "
+    print(f"Total: {flips} of {eligible} failing cells flip "
           f"under deterministic re-anchor.")
     return 0
 

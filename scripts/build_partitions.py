@@ -50,7 +50,7 @@ DEFAULT_MODEL_SHORT = "gemma-2-2b"
 DEFAULT_LAYER = 12
 
 import ep  # noqa: F401 - apply any compatibility shims
-from ep.discovery.dictionary import _LegacyCASCompatUnpickler, _cosine_pairwise
+from ep.discovery.dictionary import _cosine_pairwise
 from ep.discovery.pipeline import DiscoveryResult, discover
 
 
@@ -273,9 +273,7 @@ def load_dictionary(output_dir: Path, model_short: str, layer: int):
     if not path.exists():
         raise FileNotFoundError(path)
     with path.open("rb") as f:
-        # Dictionaries on the volume built before the cas→ep rename pickle
-        # under `cas.*`; the compat unpickler remaps them.
-        dictionary = _LegacyCASCompatUnpickler(f).load()
+        dictionary = pickle.load(f)
     logger.info("Loaded dictionary (%d partitions) from %s", len(dictionary), path)
     return dictionary
 
@@ -2184,9 +2182,9 @@ def main() -> None:
                             help="How the EP region is picked per concept from the "
                                  "training examples. auroc (default, reported in the "
                                  "paper) = AxBench's SAE-A rule: per-sequence max "
-                                 "cosine, then training-set AUROC. contrast = the "
-                                 "reviewed version's rule: token-mean cosine, "
-                                 "positives minus negatives.")
+                                 "cosine, then training-set AUROC. contrast = "
+                                 "token-mean cosine, positives minus negatives "
+                                 "(paper appendix F).")
     eval_group.add_argument("--axbench-dump-tag", type=str, default="",
                             help="Write AxBench outputs to axbench_<tag>/ instead of "
                                  "axbench/, so a rerun never touches the original.")

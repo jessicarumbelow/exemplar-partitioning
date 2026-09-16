@@ -1,15 +1,22 @@
-"""Modal entrypoints for the revision experiments shipped with EP.
+"""Modal entrypoints for the Taboo and resolution-toy experiments.
 
-Run from the public repository root:
-    modal run modal/revision_experiments.py::taboo_control --secrets gold
-    modal run modal/revision_experiments.py::resolution_separation
+Run from the repository root:
+    modal run modal/experiments.py::taboo_control --secrets gold
+    modal run modal/experiments.py::resolution_separation
+
+Results and model weights go to the Modal volumes named by
+``EP_MODAL_RESULTS_VOLUME`` and ``EP_MODAL_MODEL_VOLUME`` (created if
+missing). Model downloads need a Modal secret named ``huggingface`` holding
+``HF_TOKEN``.
 """
 
 from __future__ import annotations
 
+import os
+
 import modal
 
-app = modal.App("ep-revision-experiments")
+app = modal.App("ep-experiments")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -35,8 +42,10 @@ audit_image = (
     .add_local_dir("scripts", remote_path="/root/research/ep/scripts")
 )
 
-results = modal.Volume.from_name("cas-results", create_if_missing=True)
-model_cache = modal.Volume.from_name("cas-model-cache", create_if_missing=True)
+results = modal.Volume.from_name(
+    os.environ.get("EP_MODAL_RESULTS_VOLUME", "ep-results"), create_if_missing=True)
+model_cache = modal.Volume.from_name(
+    os.environ.get("EP_MODAL_MODEL_VOLUME", "ep-model-cache"), create_if_missing=True)
 worker = dict(
     image=image, gpu="H100", memory=32768,
     volumes={"/vol": results, "/models": model_cache},

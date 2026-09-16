@@ -16,10 +16,10 @@ __pycache__/
 
 # Outputs / artifacts
 images/
-results/
+results/*
+!results/summaries/
 outputs/
 wandb/
-repickled/
 *.pkl
 *.npz
 

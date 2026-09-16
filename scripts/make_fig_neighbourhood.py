@@ -1,7 +1,7 @@
 """3D spherical Voronoi figure highlighting one anchor partition and its
 top-k cosine-nearest neighbours, with their logit-lens top tokens.
 
-For paper §3.6.5 (function and content in partition geometry): generate
+For paper appendix §A.2 (function and content in region geometry): generate
 two contrasting figures — one anchor whose neighbours are content-coherent,
 one whose neighbours are function-coherent — to illustrate the heterogeneity
 of EP neighbour structure.

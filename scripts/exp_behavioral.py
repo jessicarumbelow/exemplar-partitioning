@@ -487,8 +487,7 @@ def main():
 
         bases_to_try = ("mean", "exemplar", "exemplar_reanchored")
 
-        # exemplar_reanchored: deterministic on-axis exemplar fix for the
-        # streaming-luck failure mode. For each ablated partition, replace the
+        # exemplar_reanchored: for each ablated partition, replace the
         # first-arrival exemplar with the sample_members entry whose direction
         # has highest cosine to the partition's mean_member_direction. The
         # reservoir is already centered+unit (see Dictionary._reservoir_sample_members),

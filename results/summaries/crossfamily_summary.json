@@ -1,0 +1,25 @@
+{
+  "prompt_order": "1176 harmful prompts followed by 1176 benign prompts",
+  "percentile": 12,
+  "purity_threshold": 1.0,
+  "base_round_trip_grid_mean": 0.187,
+  "instruction_tuned_round_trip_grid_mean": 0.439,
+  "gemma_layer_18_llama_layer_17": {
+    "returned_regions": 25,
+    "anchor_regions": 37,
+    "permutation_null_mean": 2.89,
+    "permutation_null_max_2000": 11
+  },
+  "fully_refused_harmful_regions": {
+    "gemma": [23, 37],
+    "llama": [52, 91]
+  },
+  "all_region_grid_mean": {
+    "base": 0.345,
+    "instruction_tuned": 0.324
+  },
+  "tfidf_kmeans_k161_harmful_coverage": {
+    "purity_0.9": 0.457,
+    "purity_1.0": 0.270
+  }
+}

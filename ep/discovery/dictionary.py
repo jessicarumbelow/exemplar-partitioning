@@ -782,7 +782,7 @@ class Dictionary:
             cache_dir=cache_dir,
         )
         with open(path, "rb") as f:
-            return _LegacyCASCompatUnpickler(f).load()
+            return pickle.load(f)
 
     def __len__(self) -> int:
         return len(self.partitions)
@@ -793,19 +793,3 @@ class Dictionary:
                 f"{n_real} with ≥2 members, θ={self.threshold:.4f}, "
                 f"||center||={float(np.linalg.norm(self.center)):.4f})")
 
-
-# Dictionaries published to HuggingFace before the 2026-05-03 cas→ep rename
-# were pickled with module path `cas.discovery.dictionary`. We remap on load
-# so old caches (and users on older `ep` versions whose caches still point at
-# pre-rename blobs) don't hit ModuleNotFoundError.
-class _LegacyCASCompatUnpickler(pickle.Unpickler):
-    _CLASS_REMAP = {
-        ("ep.discovery.dictionary", "ConceptLibrary"): "Dictionary",
-        ("ep.discovery.dictionary", "Concept"): "Partition",
-    }
-
-    def find_class(self, module: str, name: str):
-        if module.startswith("cas."):
-            module = "ep." + module[len("cas."):]
-        name = self._CLASS_REMAP.get((module, name), name)
-        return super().find_class(module, name)

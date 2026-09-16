@@ -1,4 +1,4 @@
-"""Shared visualization style for EP plots. Matches the Disco dashboard aesthetic."""
+"""Shared visualization style for EP plots."""
 
 import warnings
 
@@ -75,7 +75,7 @@ SEQUENTIAL_COLORSCALE = [
 
 
 def base_layout(**overrides):
-    """Standard Plotly layout matching the Disco dashboard."""
+    """Standard Plotly layout."""
     layout = dict(
         font=dict(family=FONT_FAMILY, size=11, color=TEXT_COLOR),
         paper_bgcolor="rgba(0,0,0,0)",

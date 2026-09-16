@@ -72,12 +72,10 @@ def _patched(fn):
             f"Upstream may have moved; re-pin _NEEDLE."
         )
     src = src.replace(_NEEDLE, _CAP)
-    # Enable LM cache so persist_lm_cache fills across runs. Upstream
-    # hardcodes ``use_cache=False`` at the inference DatasetFactory site
-    # (inference.py:610), which makes ``save_cache`` a no-op via the
-    # internal ``if self.use_cache:`` guard, so atexit-registered cache
-    # dumps silently drop everything. Re-spending the LLM-judge bill on
-    # every restart is the symptom; this flip is the fix.
+    # Enable the LM cache so persist_lm_cache fills across runs. Upstream
+    # hardcodes ``use_cache=False`` at the inference DatasetFactory site,
+    # which makes ``save_cache`` a no-op and re-spends the LLM-judge calls
+    # on every restart.
     src = src.replace("use_cache=False,", "use_cache=True,")
     # Rows served from EP_AXBENCH_LATENT_DATA are already templated.
     src = src.replace(

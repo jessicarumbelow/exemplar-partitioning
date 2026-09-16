@@ -1,0 +1,36 @@
+{
+  "resolution_sensitivity": {
+    "protocol": "original 60-transcript pilot, layer 32",
+    "results": [
+      {"secret":"gold","p":4,"k":46,"taboo_members":14,"base_members":0,"embedding_rank":0,"logit_lens_rank":0},
+      {"secret":"gold","p":8,"k":37,"taboo_members":30,"base_members":0,"embedding_rank":0,"logit_lens_rank":0},
+      {"secret":"chair","p":4,"k":37,"taboo_members":12,"base_members":0,"embedding_rank":2,"logit_lens_rank":2},
+      {"secret":"chair","p":8,"k":26,"taboo_members":18,"base_members":0,"embedding_rank":2,"logit_lens_rank":2},
+      {"secret":"smile","p":4,"k":44,"taboo_members":12,"base_members":0,"embedding_rank":2,"logit_lens_rank":4},
+      {"secret":"smile","p":8,"k":38,"taboo_members":20,"base_members":0,"embedding_rank":2,"logit_lens_rank":4}
+    ]
+  },
+  "gold_layer_sweep": {
+    "protocol": "original 60-transcript pilot, p=12",
+    "results": [
+      {"layer":16,"k":18,"taboo_members":30,"base_members":0,"embedding_rank":2,"logit_lens_rank":2},
+      {"layer":20,"k":20,"taboo_members":30,"base_members":0,"embedding_rank":20623,"logit_lens_rank":2492},
+      {"layer":24,"k":19,"taboo_members":30,"base_members":0,"embedding_rank":8144,"logit_lens_rank":4173},
+      {"layer":28,"k":21,"taboo_members":32,"base_members":0,"embedding_rank":1,"logit_lens_rank":13},
+      {"layer":32,"k":21,"taboo_members":30,"base_members":0,"embedding_rank":0,"logit_lens_rank":0},
+      {"layer":36,"k":20,"taboo_members":30,"base_members":0,"embedding_rank":0,"logit_lens_rank":0},
+      {"layer":40,"k":21,"taboo_members":30,"base_members":0,"embedding_rank":89423,"logit_lens_rank":3537}
+    ]
+  },
+  "gold_secret_text_exclusion": {
+    "protocol": "full cohort, layer 32, p=12, case-insensitive secret-string exclusion",
+    "input_transcripts": 500,
+    "excluded_transcripts": 1,
+    "remaining_transcripts": 499,
+    "k": 84,
+    "taboo_members": 280,
+    "base_members": 0,
+    "embedding_rank": 0,
+    "logit_lens_rank": 0
+  }
+}

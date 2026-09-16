@@ -1,13 +1,11 @@
 """Pre-compute the activation center and clustering threshold from a fixed
 calibration sample, then cache them for reuse across runs.
 
-Both quantities used to be derived as streaming approximations during
-dictionary construction (running mean of activations; running average of the
-within-batch p-th percentile). Streaming makes them drift early and bake in
-the data ordering. Pre-computing once per (model, hook, percentile) and
-freezing the values gives every dictionary built on the same activations the
-same geometric reference — so runs across seeds, methods, and evals are
-apples-to-apples.
+Streaming estimates of these quantities (a running mean, a running
+within-batch percentile) drift early and bake in the data ordering.
+Pre-computing once per (model, hook, percentile) and freezing the values
+gives every dictionary built on the same activations the same geometric
+reference — so runs across seeds, methods, and evals are apples-to-apples.
 
 The center is direction-first to stay consistent with the rest of the
 method (which is fully cosine/direction-based):

@@ -1,7 +1,7 @@
 """Build one cross-family assignment cache from saved activations.
 
 The input is a NumPy array shaped ``(prompts, layers, hidden_dim)``. Prompt
-order must match across all four checkpoints. The revision uses harmful prompts
+order must match across all four checkpoints. The paper uses harmful prompts
 first and benign prompts second; the cache itself stores no prompt text.
 """
 

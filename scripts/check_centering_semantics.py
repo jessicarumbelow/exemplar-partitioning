@@ -1,4 +1,4 @@
-"""Diagnostic for §3.5 centering ablation.
+"""Diagnostic for the centering step (paper §2).
 
 Two questions:
   1. Does centering reorganise the neighbour graph, or just rescale it?

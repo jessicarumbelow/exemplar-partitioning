@@ -32,7 +32,7 @@ EP_AXBENCH_SELECTION  how the region is chosen from the training examples.
   GemmaScopeSAEMaxAUC — max cosine over the positions of each training
   sequence, then the region with the highest training-set AUROC. Same
   pooling as the evaluator uses at test time.
-  "contrast" (the reviewed version's rule): mean cosine over all positive
+  "contrast" (the token-mean contrast rule, paper appendix F): mean cosine over all positive
   tokens minus mean cosine over all negative tokens, argmax over regions.
 
 EP_ACT_CACHE_DIR  if set, residual activations for every AxBench sequence
@@ -43,6 +43,7 @@ EP_ACT_CACHE_DIR  if set, residual activations for every AxBench sequence
 import atexit
 import hashlib
 import os
+import pickle
 from pathlib import Path
 
 import numpy as np
@@ -51,7 +52,6 @@ from scipy.stats import rankdata
 from pyvene import IntervenableConfig, IntervenableModel
 from torch.utils.data import DataLoader
 
-from ep.discovery.dictionary import _LegacyCASCompatUnpickler
 from ep.saebench_adapter import EPDictionarySAE
 
 from .interventions import AdditionIntervention, SubspaceIntervention
@@ -77,7 +77,7 @@ def _load_adapter(path: str, basis: str, device: torch.device) -> EPDictionarySA
     if key in _ADAPTER_CACHE:
         return _ADAPTER_CACHE[key]
     with open(path, "rb") as f:
-        dictionary = _LegacyCASCompatUnpickler(f).load()
+        dictionary = pickle.load(f)
     adapter = EPDictionarySAE(
         dictionary=dictionary,
         model_name="",

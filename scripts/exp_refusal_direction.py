@@ -81,10 +81,8 @@ def _generate_hooked(model, prompts, hooks, max_new_tokens, batch_size):
     # Batch only prompts of IDENTICAL token length, so nothing is padded.
     # TransformerLens mishandles left padding on Llama-3.1-8B-Instruct: the
     # unsteered refusal rate on harmful prompts falls 0.95 -> 0.52 -> 0.02 as
-    # padding grows, and it is padding itself, not the KV cache (disabling the
-    # cache does not help) and not the pad id (a dedicated pad token does not
-    # help). Gemma-2-2b-it is insensitive, which is why this went unnoticed.
-    # Zero padding sidesteps the bug rather than trying to correct it.
+    # padding grows. It is padding itself, not the KV cache and not the pad
+    # id. Gemma-2-2b-it is insensitive. Zero padding avoids the problem.
     by_len = {}
     for i, f in enumerate(formatted):
         n = len(tok(f, add_special_tokens=False)["input_ids"])
@@ -293,30 +291,18 @@ def main():
 
     # A batching or tokenisation fault can silently change what the model does
     # before a single steering condition runs, and every downstream number then
-    # describes a model that is not the one section 1 measured. Check it here.
+    # describes a model that is not the one the paper (§4) measured. Check it here.
     base_h = next(r for r in rows if r["condition"] == "baseline"
                   and r["side"] == "harmful")["refusal_rate"]
     if base_h < args.min_baseline_refusal:
         raise RuntimeError(
             f"unsteered harmful refusal {base_h:.2f} < {args.min_baseline_refusal:.2f}"
-            f" -- the harness is altering behaviour before any steering; section 1"
+            f" -- the harness is altering behaviour before any steering; the paper (§4)"
             f" measures 0.97 (Gemma) and 0.93 (Llama). Refusing to produce results.")
     logger.info("baseline check passed: unsteered harmful refusal %.2f", base_h)
 
-    # A run whose unsteered model is not the model section 1 describes is not
-    # worth finishing. Batched generation corrupted Llama's refusal behaviour
-    # silently once already (0.93 -> 0.08); this makes that fail loudly.
-    base_harmful = next(r for r in rows if r["condition"] == "baseline"
-                        and r["side"] == "harmful")["refusal_rate"]
-    if base_harmful < args.min_baseline_refusal:
-        raise SystemExit(
-            f"unsteered harmful refusal {base_harmful:.2f} < "
-            f"{args.min_baseline_refusal:.2f}: section 1 reports 0.97 (Gemma) "
-            f"and 0.93 (Llama). The model is not behaving as published -- check "
-            f"padding, chat template and batch size before trusting any result.")
-
     if args.mode == "natural":
-        # No intervention at all. Section 1 says the harmful prompts a model
+        # No intervention at all. The paper (§4) says the harmful prompts a model
         # ANSWERS still sit in wholly harmful regions, and infers that refusal
         # failed while recognition held. That inference is about the model's own
         # failures, which steering cannot speak to -- steering shows the two
