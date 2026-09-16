@@ -334,10 +334,9 @@ def main():
         print(f"region {r:4d} n={counts[r]:5d} match={best_match[r]:.3f} "
               f"secret_rank={rank:6d} top={top[:8]}")
 
-    # OOD selector: taboo activations that the STOCK dictionary cannot cover
-    # are the fine-tune's new behaviour. Rank taboo regions by their members'
-    # mean nearest-exemplar distance under the stock dictionary and lens the
-    # top — distance-to-cover as the unsupervised discovery signal.
+    # Exploratory distance ranking: rank taboo regions by their members'
+    # mean nearest-exemplar distance under the stock dictionary. This does
+    # not establish that those activations lie outside its coverage.
     _, dist_under_stock = d_stock.assign(acts_taboo)
     ood_score = np.array([dist_under_stock[ids_taboo == r].mean()
                           if counts[r] else 0.0 for r in range(k_taboo)])
@@ -351,7 +350,7 @@ def main():
             "secret_rank": rank, "top_tokens": top,
             "member_tokens": [m[2] for m in members],
         })
-        print(f"OOD region {r:4d} n={counts[r]:5d} dist={ood_score[r]:.3f} "
+        print(f"Distance-ranked region {r:4d} n={counts[r]:5d} dist={ood_score[r]:.3f} "
               f"secret_rank={rank:6d} top={top[:8]}")
 
     # Baseline: secret rank across ALL taboo regions, most-changed vs rest.

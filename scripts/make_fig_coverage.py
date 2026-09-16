@@ -1,4 +1,6 @@
-"""Build the held-out coverage figure for the paper.
+"""Plot the exploratory held-out geometric coverage results.
+
+This experiment is no longer in the revised paper.
 
 Two-panel layout: within-threshold rate (left) and mean nearest-exemplar
 distance (right) versus dictionary percentile, on three corpora — Pile
@@ -127,7 +129,7 @@ def main():
     axR.legend(loc="lower right", framealpha=0.9, fontsize=7, ncol=1)
 
     fig.suptitle(
-        "Held-out coverage and OOD signal across resolution and layer "
+        "Held-out geometric coverage across resolution and layer "
         "(gemma-2-2b-it)", fontsize=11, y=1.00,
     )
     fig.tight_layout()
