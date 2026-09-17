@@ -162,19 +162,13 @@ def run_layer(model, args, L, out_dir, acts_all, z, meta, prompts, candidates):
         rows.append({"condition": cond, "side": side, "layer": L,
                      "n_directions": 0 if not hooks else hooks[0][1].n, **_score(gens)})
         completions[f"{cond}|{side}"] = gens
-        logger.info("  %-22s %-7s refusal %.2f  uniq %.2f", cond, side,
-                    rows[-1]["refusal_rate"], rows[-1]["unique_token_ratio"])
+        logger.info("  %-22s %-7s uniq %.2f", cond, side,
+                    rows[-1]["unique_token_ratio"])
         return rows[-1]
 
-    # Baseline always runs when we compute anything: it is the abort guard.
+    # Baseline always runs when we compute anything.
     for side in sides:
         run("baseline", side, [])
-    base_h = next(r for r in rows if r["condition"] == "baseline"
-                  and r["side"] == "harmful")["refusal_rate"]
-    if base_h < args.min_baseline_refusal:
-        raise SystemExit(f"L{L}: unsteered harmful refusal {base_h:.2f} < "
-                         f"{args.min_baseline_refusal:.2f}; the harness is altering "
-                         "behaviour before any intervention.")
 
     bases = {c: np.linalg.qr(D.T)[0] for c, D in dirs.items()}
     for cond, basis_np in bases.items():
@@ -325,7 +319,6 @@ def main():
     p.add_argument("--n-eval", type=int, default=64)
     p.add_argument("--max-new-tokens", type=int, default=64)
     p.add_argument("--batch-size", type=int, default=16)
-    p.add_argument("--min-baseline-refusal", type=float, default=0.85)
     p.add_argument("--conditions", default="all",
                    help="comma-separated conditions to (re)run; 'all' runs everything. "
                         "baseline always runs. Others merge into the existing file, so "

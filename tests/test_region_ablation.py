@@ -68,7 +68,7 @@ def test_swap_excludes_evaluation_activations_from_region_means(tmp_path, monkey
             "held_benign_idx": [5, 7]}
     args = SimpleNamespace(n_eval=2, conditions="swap-c", force=True,
                            device="cpu", batch_size=2, max_new_tokens=1,
-                           min_baseline_refusal=0.85, holdout_centroids=True,
+                           holdout_centroids=True,
                            model="toy", tag="g_it")
     observed = []
 
@@ -79,7 +79,7 @@ def test_swap_excludes_evaluation_activations_from_region_means(tmp_path, monkey
 
     monkeypatch.setattr(experiment, "calibration_centre", lambda a: np.zeros(3, dtype=np.float32))
     monkeypatch.setattr(experiment, "_generate_hooked", generate)
-    monkeypatch.setattr(experiment, "_score", lambda texts: {"refusal_rate": 1., "unique_token_ratio": 1.})
+    monkeypatch.setattr(experiment, "_score", lambda texts: {"unique_token_ratio": 1.})
     experiment.run_layer(None, args, 0, tmp_path, acts, cache, meta,
                          [str(i) for i in range(8)], ["swap-c"])
     # Harmful exemplars span x/y; benign exemplar mean is (0.5, 0, 1).

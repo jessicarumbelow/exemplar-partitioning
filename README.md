@@ -136,7 +136,7 @@ Other options: `--axbench-max-concepts` (smoke test on a prefix of the 500 conce
 ```bash
 python -m scripts.build_partitions \
     --model google/gemma-2-2b --layer 12 \
-    --percentile 10 --eval sparse_probing
+    --percentile 10 --eval sparse_probing --readout-override binary
 ```
 
 Adds: `--eval sparse_probing` and `--readout-override`, `--readout-k`.
@@ -166,7 +166,7 @@ python -m scripts.exp_taboo_inventory \
     --output outputs/taboo_inventory.json --evaluate-secret
 ```
 
-Run `python -m scripts.exp_resolution_separation --help` for the ordered-colour toy. For the causal intervention, prepare the prompt split with `python -m scripts.prepare_region_ablation --help`, then run `python -m scripts.exp_region_ablation --help` with your activation arrays and assignment cache. The paper uses `--holdout-centroids --n-eval 32 --max-new-tokens 256` with `--conditions swap-c,harmful-span-c,benign-span-c,random-span`. Evaluate Gemma layers `8,14,18,24` and Llama layers `10,14,17,31` using `--layers`. Evaluated prompts are excluded from region means, but remain in calibration, clustering, and region selection. Use a separate output directory for each centroid-exclusion mode; the script rejects incompatible cached results. The harmful-prompt corpus and activation arrays are not distributed. Small saved summaries are in [`results/summaries/`](results/summaries/). The script reports keyword-based diagnostics; these are not the paper's compliance scores. The paper uses Claude Opus 4.8 to assess delivery of the requested harmful content in the saved completions. See the [intervention summary](results/summaries/region_intervention.md) for the rubric and results.
+Run `python -m scripts.exp_resolution_separation --help` for the ordered-colour toy. For the causal intervention, prepare the prompt split with `python -m scripts.prepare_region_ablation --help`, then run `python -m scripts.exp_region_ablation --help` with your activation arrays and assignment cache. The paper uses `--holdout-centroids --n-eval 32 --max-new-tokens 256` with `--conditions swap-c,harmful-span-c,benign-span-c,random-span`. Evaluate Gemma layers `8,14,18,24` and Llama layers `10,14,17,31` using `--layers`. Evaluated prompts are excluded from region means, but remain in calibration, clustering, and region selection. Use a separate output directory for each centroid-exclusion mode; the script rejects incompatible cached results. The harmful-prompt corpus and activation arrays are not distributed. Small saved summaries are in [`results/summaries/`](results/summaries/). The script saves the completions and simple fluency diagnostics. The paper uses Claude Opus 4.8 to assess delivery of the requested harmful content in the saved completions. See the [intervention summary](results/summaries/region_intervention.md) for the rubric and results.
 
 ```bash
 python -m scripts.prepare_region_ablation \
