@@ -27,7 +27,7 @@ These produce the JSON / NPZ inputs that the figure-makers below consume.
 |-----------------------------------|------------------------------|------------------------------------------------------------------------------------------------------------------------------|
 | `exp_saturation.py`               | §6 + app. §A.1               | Online partition growth on math / code / chat streams — does dictionary size saturate?                                       |
 | `exp_resolution_paths.py`         | app. §A.3                    | Pick two partitions in a coarse dictionary; trace the shortest path between them in finer-resolution dictionaries.           |
-| `exp_coverage.py`                 | §6 + app. §C                 | Per (dictionary, corpus): within-threshold rate and mean nearest-exemplar distance — OOD geometry.                           |
+| `exp_coverage.py`                 | Exploratory; not in revised paper | Measure within-threshold rates and nearest-exemplar distances; these do not establish an OOD detector. |
 | `exp_seed_stability.py`           | §2.2 + app. §A.4             | Test whether mean partition directions are stable across random seeds.                                                       |
 | `exp_per_region_stability.py`     | §2.2 + app. §A.4             | Per-region (not aggregate) stability across builds.                                                                          |
 | `exp_stability_predictor.py`      | §2.2 + app. §A.4             | Whether $D_i = \log_{10}(N_i c_i^2)$ predicts cross-seed region stability.                                                   |

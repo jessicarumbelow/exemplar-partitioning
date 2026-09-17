@@ -1,26 +1,25 @@
-"""Held-out coverage / OOD experiment.
+"""Exploratory held-out geometric coverage experiment.
 
 For each (dictionary, corpus) pair, stream a fixed number of activations
 through the target model, assign each to its nearest exemplar via
 ``Dictionary.assign``, and report:
 - within-threshold rate: fraction of activations whose nearest-exemplar
   cosine distance is ≤ the calibrated threshold (i.e. the activation
-  falls inside an existing partition cell)
+  is within the construction threshold of an exemplar)
 - distribution stats: mean / median / p90 / p99 of nearest-exemplar
   distance
 - per-dictionary breakdown when given multiple dicts
 
 Corpora:
-  pile: in-distribution sample of `monology/pile-uncopyrighted`
-  bulgarian_wiki: Bulgarian Wikipedia (different language distribution
-    from Pile-dominant English; partial coverage expected)
-  random_tokens: uniform-random vocab IDs (out-of-distribution; coverage
-    should be near zero)
+  pile: sample of `monology/pile-uncopyrighted`
+  bulgarian_wiki: Bulgarian Wikipedia
+  random_tokens: uniform-random vocab IDs
 
-The point: at sufficient resolution, EP partitions cover the real
-held-out distribution but reject random activations. The within-threshold
-rate functions as a free distribution-shift / OOD signal — no
-auxiliary classifier or confidence head needed.
+Retained for reproducibility; this experiment is no longer in the revised
+paper. Its coverage and distance statistics do not establish a reliable
+out-of-distribution detector. This historical extraction path omits BOS,
+whereas dictionary construction prepends it; account for that mismatch
+before comparing these distances with the construction threshold.
 
 Run:
     uv run python -m scripts.exp_coverage --dict-paths d1.pkl,d2.pkl,d3.pkl
