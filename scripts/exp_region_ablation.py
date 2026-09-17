@@ -6,11 +6,13 @@ benign when every assigned prompt has that label. At L14 the paper's main
 condition is ``swap-c``: project each residual activation off the span of the
 harmful-region means in centred space, then add the benign-region mean position
 within that span. The script also supports the reported projection and shift
-controls and the L8--L20 layer sweep.
+controls and layer sweeps. The opt-in ``swap-global`` control requires
+``--holdout-centroids`` and uses corpus-wide harmful and benign means.
 
 ``prepare_region_ablation`` produces the prompt split consumed here. Evaluation
-prompts exclude region exemplars, but they were used to build the regions and
-can contribute to their means. This is a within-corpus intervention.
+prompts exclude region exemplars. With ``--holdout-centroids``, they are also
+excluded from the region means. Calibration, clustering, and region selection
+still use the full corpus; this is not an independently held-out dataset.
 """
 from __future__ import annotations
 
@@ -88,13 +90,16 @@ CANDIDATES_BASE = ["harmful-span", "benign-span", "random-span", "swap", "meansh
                    "harmful-span-c", "benign-span-c", "swap-c", "meanshift-c"]
 
 
-def condition_todo(out_dir, selected, force, candidates):
+def condition_todo(out_dir, selected, force, candidates, holdout_centroids=False):
     """What is left to compute at out_dir, from the results file alone (no model,
     no activations) so we can decide whether to load the model at all."""
     existing = set()
     rpath = out_dir / "results.json"
     if rpath.exists():
-        existing = {r["condition"] for r in json.loads(rpath.read_text()).get("rows", [])}
+        saved = json.loads(rpath.read_text())
+        if saved.get("holdout_centroids") != holdout_centroids:
+            raise ValueError("Centroid exclusion differs from saved results; use a different output directory")
+        existing = {r["condition"] for r in saved.get("rows", [])}
     return [c for c in candidates
             if (selected is None or c in selected) and (force or c not in existing)]
 
@@ -102,6 +107,8 @@ def condition_todo(out_dir, selected, force, candidates):
 def run_layer(model, args, L, out_dir, acts_all, z, meta, prompts, candidates):
     """Compute + write all wanted conditions at one layer. Model is passed in so a
     sweep loads it once."""
+    selected = None if args.conditions == "all" else set(args.conditions.split(","))
+    condition_todo(out_dir, selected, args.force, candidates, args.holdout_centroids)
     held_h, held_b = meta["held_harmful_idx"], meta["held_benign_idx"]
     a = np.asarray(acts_all[:, L], dtype=np.float32)
     is_harmful = np.arange(len(a)) < meta["n_per_side"]
@@ -220,8 +227,36 @@ def run_layer(model, args, L, out_dir, acts_all, z, meta, prompts, candidates):
             run(sn, "benign", [(hook_name, add_shift(alpha * norm * v_t))])
 
     # Centroid variants: each region described by the mean of its members.
-    cH = np.stack([a[m].mean(0) for _, m in reg.values() if is_harmful[m].all()])
-    cB = np.stack([a[m].mean(0) for _, m in reg.values() if (~is_harmful[m]).all()])
+    # Held-out: drop the evaluated prompts from the means the swap is scored
+    # against. Calibration and region construction still use all prompts.
+    # Each pure region retains its exemplar, which evaluation excludes.
+    drop = (set(eval_h) | set(eval_b)) if args.holdout_centroids else set()
+    if selected and "swap-global" in selected and want("swap-global"):
+        if not args.holdout_centroids:
+            raise ValueError("swap-global requires --holdout-centroids")
+        keep = np.array([i not in drop for i in range(len(a))])
+        harmful_mean = a[keep & is_harmful].mean(0)
+        benign_mean = a[keep & ~is_harmful].mean(0)
+        direction = centered_unit(harmful_mean[None, :], centre).T
+        basis = torch.tensor(direction, dtype=torch.float32, device=args.device)
+        offset = torch.tensor(benign_mean - centre, dtype=torch.float32,
+                              device=args.device)
+        put_back = basis @ (basis.T @ offset)
+        hooks = [(hook_name, project_off(basis, centre_t, put_back))]
+        run("swap-global", "harmful", hooks)
+        run("swap-global", "benign", hooks)
+    _fell_back = [0]
+    def _cmean(m):
+        keep = [i for i in m if i not in drop]
+        if not keep:
+            _fell_back[0] += 1
+            keep = list(m)
+        return a[keep].mean(0)
+    cH = np.stack([_cmean(m) for _, m in reg.values() if is_harmful[m].all()])
+    cB = np.stack([_cmean(m) for _, m in reg.values() if (~is_harmful[m]).all()])
+    if args.holdout_centroids:
+        logger.info("L%d: held-out centroids (dropped %d eval prompts; %d regions "
+                    "fell back to full mean)", L, len(drop), _fell_back[0])
     bases_c = {"harmful-span-c": np.linalg.qr(centered_unit(cH, centre).T)[0],
                "benign-span-c": np.linalg.qr(centered_unit(cB[:n], centre).T)[0]}
     for cond, basis_np in bases_c.items():
@@ -262,6 +297,7 @@ def run_layer(model, args, L, out_dir, acts_all, z, meta, prompts, candidates):
          "n_harmful_regions": n, "n_benign_regions": len(b_ex),
          "n_eval_harmful": len(eval_h), "n_eval_benign": len(eval_b),
          "max_new_tokens": args.max_new_tokens,
+         "holdout_centroids": args.holdout_centroids,
          "harmful_exemplar_idx": h_ex, "benign_exemplar_idx": b_ex[:n],
          "elapsed_s": time.time() - t0, "rows": rows}, indent=1))
     cpath.write_text(json.dumps(completions, indent=1))
@@ -284,6 +320,8 @@ def main():
     p.add_argument("--output-dir", type=Path, required=True,
                    help="single-layer: the output dir. sweep (--layers): the root; "
                         "each layer writes <root>/<tag>_L<L>_n<n_eval>.")
+    p.add_argument("--holdout-centroids", action="store_true",
+                   help="exclude evaluated prompts from region means, not dictionary construction")
     p.add_argument("--n-eval", type=int, default=64)
     p.add_argument("--max-new-tokens", type=int, default=64)
     p.add_argument("--batch-size", type=int, default=16)
@@ -308,6 +346,9 @@ def main():
                                     for x in args.steer_alphas.split(",")]
     selected = None if args.conditions == "all" else set(args.conditions.split(","))
 
+    if selected and "swap-global" in selected:
+        candidates = candidates + ["swap-global"]
+
     meta = json.loads((args.split_dir / "meta.json").read_text())
     prompts = json.loads((args.split_dir / "prompts.json").read_text())
     z = np.load(args.cache)
@@ -319,7 +360,8 @@ def main():
 
     # Decide, without the model, which layers have work left.
     work = [(L, out_dir_for(L)) for L in layers
-            if condition_todo(out_dir_for(L), selected, args.force, candidates)]
+            if condition_todo(out_dir_for(L), selected, args.force, candidates,
+                              args.holdout_centroids)]
     if not work:
         logger.info("nothing to do for layers %s (use --force to recompute)", layers)
         return

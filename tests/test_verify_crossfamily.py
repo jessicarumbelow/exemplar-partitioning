@@ -27,3 +27,10 @@ def test_permutation_null_re_pairs_shared_prompts():
 
     assert module.round_trip_count(anchor, target, 0, 0, identity, identity) == 2
     assert module.round_trip_count(anchor, target, 0, 0, swapped, identity) == 0
+
+
+def test_all_region_grid_includes_nonharmful_regions():
+    anchor = (np.array([[0, 0, 1, 1]]), [{0: 0, 1: 2}], [{0: 1.0, 1: 0.0}])
+    target = (np.array([[0, 0, 0, 0]]), [{0: 0}], [{0: 0.5}])
+    assert module.grid(anchor, target)[0, 0] == 1.0
+    assert module.grid(anchor, target, harmful_only=False)[0, 0] == 0.5

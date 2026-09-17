@@ -29,12 +29,12 @@ def load(path):
     return ids_all, exemplars, fractions
 
 
-def grid(anchor, target):
+def grid(anchor, target, harmful_only=True):
     ids_a, exemplars_a, fractions_a = anchor
     ids_b, exemplars_b, _ = target
     result = np.full((len(ids_a), len(ids_b)), np.nan)
     for layer_a in range(len(ids_a)):
-        regions = [r for r, f in fractions_a[layer_a].items() if f == 1.0]
+        regions = [r for r, f in fractions_a[layer_a].items() if not harmful_only or f == 1.0]
         if not regions:
             continue
         for layer_b in range(len(ids_b)):
@@ -70,6 +70,8 @@ def main():
     l_base = load(args.cache_dir / "cache_l_base.npz")
     g_tuned = load(args.cache_dir / "cache_g_it.npz")
     l_tuned = load(args.cache_dir / "cache_l_it.npz")
+    print(f"all-region base mean: {np.nanmean(grid(g_base, l_base, False)):.1%}")
+    print(f"all-region instruction-tuned mean: {np.nanmean(grid(g_tuned, l_tuned, False)):.1%}")
     base = grid(g_base, l_base)
     tuned = grid(g_tuned, l_tuned)
     print(f"base mean: {np.nanmean(base):.1%}")
